@@ -1,0 +1,22 @@
+# Local AWS credentials and generated config
+.aws/
+credentials*
+*credentials*
+
+# Terraform local state/cache
+**/.terraform/
+**/.terraform.lock.hcl
+**/*.tfstate
+**/*.tfstate.*
+**/crash.log
+**/crash.*.log
+**/backend.hcl
+**/.terraformrc
+**/terraform.rc
+
+# Generated data
+parte-1/dados/saida/
+
+# Python
+__pycache__/
+*.pyc
