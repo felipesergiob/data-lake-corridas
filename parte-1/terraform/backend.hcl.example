@@ -1,0 +1,6 @@
+# Copie para backend.hcl. Bucket de estado do grupo 11; lock compartilhado da disciplina.
+bucket         = "eda262-g11-tfstate"
+key            = "parte-1/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "eda-tflock"
+encrypt        = true
