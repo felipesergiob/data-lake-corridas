@@ -1,0 +1,29 @@
+AV1 - consulta da pergunta de negocio (Athena)
+data ................ 2026-10-04T22:23:18Z
+workgroup ........... eda262-g11-athena-wg
+database ............ eda262_g11
+QueryExecutionId .... 34753c1e-c6cc-46a6-8790-a14567e37774
+estado .............. SUCCEEDED
+DataScannedInBytes .. 117587268
+tempo (ms) .......... 1801
+custo (USD) ......... 0.00053472   # DataScannedInBytes / 1099511627776 * 5
+
+--- SQL ---
+SELECT
+  bairro,
+  count(*) AS corridas_madrugada,
+  round(sum(valor), 2) AS receita_madrugada
+FROM corridas_trusted
+WHERE substr(data_corrida, 12, 2) BETWEEN '00' AND '05'
+  AND valor IS NOT NULL
+GROUP BY bairro
+ORDER BY receita_madrugada DESC
+LIMIT 5;
+
+--- resultado ---
+bairro	corridas_madrugada	receita_madrugada
+Boa Viagem	8564	138210.0
+Pina	3404	55760.1
+Recife Antigo	2853	46907.49
+Ilha do Leite	2646	42262.17
+Espinheiro	2369	38366.57

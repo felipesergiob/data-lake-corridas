@@ -1,0 +1,5 @@
+[1mAV1 — destroy limpo (regiao us-east-1)[0m
+----------------------------------------------------------------
+[32mPASSA[0m  [5]  (15%)  nenhum bucket, database ou workgroup orfao da AV1.
+----------------------------------------------------------------
+[1mResultado pos-destroy: 15/15[0m

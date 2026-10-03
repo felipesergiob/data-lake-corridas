@@ -1,0 +1,56 @@
+[1mAV1 — verificacao do projeto (regiao us-east-1)[0m
+----------------------------------------------------------------
+[1mCriterio 0 — estrutura local da entrega[0m
+[32mPASSA[0m  [0]  (0%)  Terraform modular, backend s3, schema declarado e sem particionamento.
+----------------------------------------------------------------
+[1mCriterio 1 — workspace e backend remoto[0m
+[32mPASSA[0m  [1]  (10%)  workspace av1 ativo.
+[2m       sem estado local com recursos.[0m
+----------------------------------------------------------------
+[1mCriterio 2 — outputs e nomes padronizados[0m
+[2m       bucket=eda262-g11-lake-trusted results=eda262-g11-athena-results db=eda262_g11 table=corridas_trusted wg=eda262-g11-athena-wg teto=268435456[0m
+[32mPASSA[0m  [2]  (15%)  outputs existem e seguem eda262-gNN.
+----------------------------------------------------------------
+[1mCriterio 3 — recursos AWS, tags e schema trusted[0m
+{
+    "BucketArn": "arn:aws:s3:::eda262-g11-lake-trusted",
+    "BucketRegion": "us-east-1",
+    "AccessPointAlias": false
+}
+[2m       tags bucket: turma=eda262 grupo=g11 projeto=engenharia-de-dados[0m
+[2m       schema: colunas=9 location=s3://eda262-g11-lake-trusted/trusted/corridas/ grain=uma linha por corrida finalizada[0m
+[32mPASSA[0m  [3]  (15%)  recursos tagueados e tabela trusted com schema declarado.
+----------------------------------------------------------------
+[1mCriterio 4 — dados, consulta e custo Athena[0m
+[2m       objetos trusted: 1 · bytes S3: 117584519[0m
+[2m       query_id=683b3a6b-d183-46aa-baf6-1c033665b786 estado=SUCCEEDED bytes=117587268[0m
+[2m       custo_estimado_usd=0.00053472[0m
+------------------------
+|    GetQueryResults   |
++----------------------+
+|  bairro              |
+|  corridas_madrugada  |
+|  receita_madrugada   |
+|  Boa Viagem          |
+|  8564                |
+|  138210.0            |
+|  Pina                |
+|  3404                |
+|  55760.1             |
+|  Recife Antigo       |
+|  2853                |
+|  46907.49            |
+|  Ilha do Leite       |
+|  2646                |
+|  42262.17            |
+|  Espinheiro          |
+|  2369                |
+|  38366.57            |
++----------------------+
+[32mPASSA[0m  [4]  (20%)  pergunta respondida no Athena com custo medido.
+----------------------------------------------------------------
+[1mCriterio 6 — DECISOES.md[0m
+[32mPASSA[0m  [6]  (0%)  encontrei 5 decisoes; conteudo e nota sao avaliados manualmente.
+----------------------------------------------------------------
+[1mResumo automatico: 60/60 pontos-percentuais[0m
+[2m       rode ./verifica.sh --pos-destroy depois do terraform destroy.[0m
