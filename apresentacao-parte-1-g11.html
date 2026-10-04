@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AV1 · Grupo 11 · Data Lake de Corridas</title>
+<style>
+  :root {
+    --laranja: #F26A21;
+    --preto: #1A1A1A;
+    --cinza: #6B6B6B;
+    --claro: #F4F4F2;
+    --linha: #D9D9D6;
+    --fundo: #FFFFFF;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #111; font-family: Arial, Helvetica, sans-serif; color: var(--preto); overflow: hidden; }
+
+  /* palco 16:9 que escala para qualquer tela */
+  #palco { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #deck { width: 1280px; height: 720px; position: relative; background: var(--fundo); transform-origin: center center; overflow: hidden; }
+
+  .slide { position: absolute; inset: 0; padding: 64px 84px 56px; display: none; flex-direction: column; }
+  .slide.ativo { display: flex; }
+  .slide::before { content: ""; position: absolute; left: 0; top: 0; width: 14px; height: 100%; background: var(--laranja); }
+
+  .kicker { font-size: 16px; letter-spacing: 3px; text-transform: uppercase; color: var(--laranja); font-weight: bold; margin-bottom: 14px; }
+  h1 { font-size: 64px; line-height: 1.05; font-weight: bold; }
+  h2 { font-size: 44px; line-height: 1.1; font-weight: bold; margin-bottom: 30px; }
+  .sub { font-size: 24px; color: var(--cinza); margin-top: 22px; line-height: 1.4; }
+
+  ul { list-style: none; font-size: 28px; line-height: 1.35; }
+  ul li { padding-left: 34px; position: relative; margin-bottom: 16px; }
+  ul li::before { content: ""; position: absolute; left: 0; top: 0.5em; width: 12px; height: 12px; background: var(--laranja); }
+  b, .num { color: var(--laranja); font-weight: bold; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 0.85em; background: var(--claro); padding: 2px 8px; }
+
+  .rodape { position: absolute; left: 84px; right: 56px; bottom: 22px; display: flex; justify-content: space-between; font-size: 13px; color: var(--cinza); }
+
+  /* capa */
+  .capa { justify-content: center; }
+  .capa .meta { margin-top: 44px; font-size: 20px; color: var(--cinza); line-height: 1.7; }
+
+  /* números grandes */
+  .grade { display: grid; gap: 20px; }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g2 { grid-template-columns: repeat(2, 1fr); }
+  .cartao { border: 2px solid var(--linha); padding: 22px 24px; }
+  .cartao .valor { font-size: 46px; font-weight: bold; color: var(--laranja); line-height: 1.1; }
+  .cartao .rot { font-size: 18px; color: var(--cinza); margin-top: 8px; line-height: 1.3; }
+
+  /* tabela de decisões */
+  table { width: 100%; border-collapse: collapse; font-size: 22px; }
+  th { text-align: left; font-size: 14px; letter-spacing: 2px; text-transform: uppercase; color: var(--cinza); padding: 0 12px 10px; border-bottom: 3px solid var(--preto); }
+  td { padding: 15px 12px; border-bottom: 1px solid var(--linha); vertical-align: top; line-height: 1.3; }
+  td:first-child { font-weight: bold; width: 17%; }
+  td.n { color: var(--laranja); font-weight: bold; white-space: nowrap; }
+
+  /* arquitetura */
+  .fluxo { display: flex; align-items: stretch; gap: 0; margin-top: 8px; }
+  .caixa { flex: 1; border: 2px solid var(--preto); padding: 18px 16px; font-size: 19px; line-height: 1.35; }
+  .caixa strong { display: block; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--laranja); margin-bottom: 8px; }
+  .caixa.dest { background: var(--preto); color: #fff; }
+  .seta { width: 38px; display: flex; align-items: center; justify-content: center; font-size: 28px; color: var(--laranja); font-weight: bold; }
+  .tfbar { margin-top: 26px; border: 2px dashed var(--laranja); padding: 14px 20px; font-size: 20px; line-height: 1.5; }
+
+  /* demo */
+  pre { background: var(--preto); color: #f2f2f2; padding: 20px 24px; font-family: Consolas, "Courier New", monospace; font-size: 19px; line-height: 1.5; white-space: pre; }
+  pre .k { color: var(--laranja); }
+  .passos { display: flex; gap: 14px; margin-bottom: 26px; }
+  .passo { flex: 1; border-top: 6px solid var(--laranja); padding-top: 10px; font-size: 20px; font-weight: bold; }
+  .passo small { display: block; font-weight: normal; color: var(--cinza); font-size: 15px; margin-top: 4px; }
+
+  .vazio { color: var(--cinza); font-style: italic; font-size: 0.55em; }
+  .nota { margin-top: 22px; font-size: 18px; color: var(--cinza); line-height: 1.45; }
+
+  /* HUD */
+  #hud { position: fixed; right: 14px; bottom: 12px; display: flex; gap: 14px; align-items: center; font-size: 13px; color: #bbb; z-index: 9; font-family: Arial, sans-serif; }
+  #relogio { background: #000; padding: 4px 10px; font-variant-numeric: tabular-nums; color: #fff; display: none; }
+  #relogio.on { display: block; }
+  #relogio.alerta { background: var(--laranja); color: #000; font-weight: bold; }
+  #ajuda { position: fixed; left: 14px; bottom: 12px; font-size: 12px; color: #888; z-index: 9; }
+
+  @media print {
+    html, body { overflow: visible; background: #fff; height: auto; }
+    #palco { position: static; display: block; }
+    #deck { transform: none !important; width: auto; height: auto; }
+    .slide { display: flex !important; position: relative; width: 1280px; height: 720px; page-break-after: always; }
+    #hud, #ajuda { display: none; }
+    @page { size: 1280px 720px; margin: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div id="palco">
+<div id="deck">
+
+  <!-- 1 · CAPA -->
+  <section class="slide capa" data-tempo="0:15">
+    <div class="kicker">Engenharia de Dados · AV1 · Parte 1</div>
+    <h1>Data Lake de corridas urbanas<br>100% em Terraform</h1>
+    <div class="sub">Quais bairros de Recife concentram mais receita na madrugada?</div>
+    <div class="meta">
+      Grupo 11 · CESAR School · 2026.2<br>
+      Thiago von Sohsten · Felipe Sérgio · Sérgio Gouveia · Thiago Menezes · Matheus Lucena · Lui Manso · Rodrigo Souza
+    </div>
+  </section>
+
+  <!-- 2 · CENÁRIO -->
+  <section class="slide" data-tempo="0:45">
+    <div class="kicker">01 · Cenário e pergunta</div>
+    <h2>Corridas urbanas em Recife</h2>
+    <ul>
+      <li>Evento: <b>corrida finalizada</b></li>
+      <li>Pergunta: <b>quais bairros</b> concentram maior receita na <b>madrugada</b> (00h–05h)?</li>
+      <li>Sujeira plausível: <b>valor</b> chega com vírgula decimal em parte dos eventos</li>
+    </ul>
+    <div class="grade g3" style="margin-top:30px">
+      <div class="cartao"><div class="valor">518.400</div><div class="rot">eventos · 30 dias × 12 por minuto</div></div>
+      <div class="cartao"><div class="valor">117,6 MB</div><div class="rot">117.584.519 bytes em JSON Lines</div></div>
+      <div class="cartao"><div class="valor">1,48%</div><div class="rot">7.688 eventos com vírgula decimal em <code>valor</code></div></div>
+    </div>
+    <div class="rodape"><span>Grupo 11 · AV1</span><span>2 / 7</span></div>
+  </section>
+
+  <!-- 3 · ARQUITETURA -->
+  <section class="slide" data-tempo="0:45">
+    <div class="kicker">02 · Arquitetura provisionada</div>
+    <h2>O que o Terraform sobe</h2>
+    <div class="fluxo">
+      <div class="caixa"><strong>Dados</strong>Gerador Python<br>JSON Lines<br><code>seed 42</code></div>
+      <div class="seta">→</div>
+      <div class="caixa"><strong>S3</strong><code>eda262-g11-lake-trusted</code><br>prefixo <code>trusted/corridas/</code></div>
+      <div class="seta">→</div>
+      <div class="caixa"><strong>Glue Catalog</strong>db <code>eda262_g11</code><br>tabela <code>corridas_trusted</code><br>9 colunas declaradas</div>
+      <div class="seta">→</div>
+      <div class="caixa dest"><strong>Athena</strong><code style="background:#333;color:#fff">eda262-g11-athena-wg</code><br>teto 256 MiB<br>resultados em S3</div>
+    </div>
+    <div class="tfbar">
+      <b>Terraform</b> · módulo <code>modules/lake</code> · backend remoto <b>S3 + DynamoDB</b> · workspace <code>av1</code> · região <code>us-east-1</code>
+    </div>
+    <ul style="font-size:22px;margin-top:22px">
+      <li>Schema <b>declarado no IaC</b> — sem Crawler</li>
+      <li>Tags em tudo: <code>turma=eda262</code> · <code>grupo=g11</code> · <code>projeto=engenharia-de-dados</code></li>
+    </ul>
+    <div class="rodape"><span>Grupo 11 · AV1</span><span>3 / 7</span></div>
+  </section>
+
+  <!-- 4 · DECISÕES -->
+  <section class="slide" data-tempo="1:15">
+    <div class="kicker">03 · Decisões de engenharia</div>
+    <h2>Cada decisão, com um número</h2>
+    <table>
+      <thead><tr><th>Decisão</th><th>Escolha</th><th>Número medido</th></tr></thead>
+      <tbody>
+        <tr><td>Grão</td><td>Uma linha por corrida finalizada</td><td class="n">518.400 linhas</td></tr>
+        <tr><td>Chave</td><td><code>corrida_id</code> (sequencial, único)</td><td class="n">518.400 distintos</td></tr>
+        <tr><td>Formato</td><td><code>valor</code> como <code>double</code>; custo: vírgula vira <code>null</code></td><td class="n">7.688 nulls · 1,48%</td></tr>
+        <tr><td>Partição</td><td>Nenhuma (fora do escopo da AV1)</td><td class="n">varre 117.587.268 B</td></tr>
+        <tr><td>Custo</td><td>Teto por consulta no workgroup</td><td class="n">268.435.456 B (256 MiB)</td></tr>
+      </tbody>
+    </table>
+    <div class="nota">O teto fica acima do volume medido: a pergunta passa, e uma consulta acidental muito maior é barrada.</div>
+    <div class="rodape"><span>Grupo 11 · AV1</span><span>4 / 7</span></div>
+  </section>
+
+  <!-- 5 · DEMO -->
+  <section class="slide" data-tempo="1:00">
+    <div class="kicker">04 · Demonstração</div>
+    <h2>apply → consulta → custo → destroy</h2>
+    <div class="passos">
+      <div class="passo">1 · apply<small>conta limpa, workspace av1</small></div>
+      <div class="passo">2 · dados<small>upload para o S3</small></div>
+      <div class="passo">3 · Athena<small>pergunta de negócio</small></div>
+      <div class="passo">4 · destroy<small>sem órfãos</small></div>
+    </div>
+<pre><span class="k">SELECT</span> bairro,
+       <span class="k">count</span>(*)             <span class="k">AS</span> corridas_madrugada,
+       <span class="k">round</span>(<span class="k">sum</span>(valor), 2) <span class="k">AS</span> receita_madrugada
+<span class="k">FROM</span>   corridas_trusted
+<span class="k">WHERE</span>  substr(data_corrida, 12, 2) <span class="k">BETWEEN</span> '00' <span class="k">AND</span> '05'
+  <span class="k">AND</span>  valor <span class="k">IS NOT NULL</span>
+<span class="k">GROUP BY</span> bairro
+<span class="k">ORDER BY</span> receita_madrugada <span class="k">DESC</span>
+<span class="k">LIMIT</span>  5;</pre>
+    <div class="nota">Verificação automática: <code>verificacao/verifica.sh</code> imprime PASSA/FALHA por critério e <code>--pos-destroy</code> confere que nada sobrou.</div>
+    <div class="rodape"><span>Grupo 11 · AV1</span><span>5 / 7</span></div>
+  </section>
+
+  <!-- 6 · CUSTO -->
+  <section class="slide" data-tempo="0:45">
+    <div class="kicker">05 · Custo medido</div>
+    <h2>Quanto custou responder a pergunta</h2>
+    <div class="grade g3">
+      <div class="cartao"><div class="valor" id="v-bytes"></div><div class="rot">DataScannedInBytes<br>(consulta no Athena)</div></div>
+      <div class="cartao"><div class="valor" id="v-custo"></div><div class="rot">custo = bytes ÷ 1 TiB × US$ 5</div></div>
+      <div class="cartao"><div class="valor" id="v-pct"></div><div class="rot">do teto de 256 MiB utilizado</div></div>
+    </div>
+    <ul style="margin-top:34px;font-size:24px">
+      <li>Resposta: <b>Boa Viagem</b> lidera a madrugada — 8.564 corridas, <b>R$ 138.210</b></li>
+      <li>Sem partição, a consulta lê tudo — <b>aceito na AV1</b>, otimizado só na Parte 2</li>
+    </ul>
+    <div class="nota" id="nota-qid"></div>
+    <div class="rodape"><span>Grupo 11 · AV1</span><span>6 / 7</span></div>
+  </section>
+
+  <!-- 7 · FECHAMENTO -->
+  <section class="slide" data-tempo="0:15">
+    <div class="kicker">06 · Fechamento</div>
+    <h2>O que entregamos</h2>
+    <ul>
+      <li>Data Lake <b>do zero em Terraform</b>, com módulo, backend remoto e workspace</li>
+      <li>Pergunta respondida no Athena com <b>custo por consulta medido</b></li>
+      <li>Decisões com número em <code>DECISOES.md</code></li>
+      <li><code>destroy</code> limpo, conferido por <code>verifica.sh</code></li>
+    </ul>
+    <div class="sub">Próximo (Parte 2): Parquet particionado, três camadas e ingestão idempotente.</div>
+    <div class="rodape"><span>Grupo 11 · AV1</span><span>7 / 7</span></div>
+  </section>
+
+</div>
+</div>
+
+<div id="ajuda">← → navegar · F tela cheia · T cronômetro · P imprimir/PDF</div>
+<div id="hud"><span id="pos"></span><span id="relogio">0:00</span></div>
+
+<script>
+/* ============================================================
+   PREENCHA APÓS RODAR A CONSULTA NO ATHENA (deixe null enquanto não medir)
+   ============================================================ */
+const MEDICAO = {
+  bytes: 117587268,
+  queryExecutionId: "34753c1e-c6cc-46a6-8790-a14567e37774"
+};
+/* ============================================================ */
+
+const TETO = 268435456;
+const slides = [...document.querySelectorAll('.slide')];
+let i = 0;
+
+/* custo */
+(function () {
+  const $ = id => document.getElementById(id);
+  if (MEDICAO.bytes) {
+    $('v-bytes').textContent = MEDICAO.bytes.toLocaleString('pt-BR');
+    $('v-custo').textContent = 'US$ ' + (MEDICAO.bytes / 1099511627776 * 5).toFixed(8).replace('.', ',');
+    $('v-pct').textContent = (MEDICAO.bytes / TETO * 100).toFixed(1).replace('.', ',') + '%';
+    if (MEDICAO.queryExecutionId) $('nota-qid').textContent = 'QueryExecutionId: ' + MEDICAO.queryExecutionId;
+  } else {
+    ['v-bytes', 'v-custo', 'v-pct'].forEach(id => $(id).innerHTML = '<span class="vazio">a medir</span>');
+    $('nota-qid').textContent = 'Preencher MEDICAO no início do script deste arquivo após rodar a consulta.';
+  }
+})();
+
+/* navegação */
+function mostra(n) {
+  i = Math.max(0, Math.min(slides.length - 1, n));
+  slides.forEach((s, k) => s.classList.toggle('ativo', k === i));
+  document.getElementById('pos').textContent = (i + 1) + ' / ' + slides.length + ' · sugerido ' + slides[i].dataset.tempo;
+  history.replaceState(null, '', '#' + (i + 1));
+}
+document.addEventListener('keydown', e => {
+  if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(e.key)) { e.preventDefault(); mostra(i + 1); }
+  else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); mostra(i - 1); }
+  else if (e.key === 'Home') mostra(0);
+  else if (e.key === 'End') mostra(slides.length - 1);
+  else if (e.key === 'f' || e.key === 'F') { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen(); }
+  else if (e.key === 't' || e.key === 'T') alternaRelogio();
+  else if (e.key === 'p' || e.key === 'P') window.print();
+});
+document.getElementById('palco').addEventListener('click', e => mostra(e.clientX < innerWidth / 3 ? i - 1 : i + 1));
+
+/* escala 16:9 */
+function escala() {
+  const s = Math.min(innerWidth / 1280, innerHeight / 720);
+  document.getElementById('deck').style.transform = 'scale(' + s + ')';
+}
+addEventListener('resize', escala); escala();
+
+/* cronômetro de 5 min (T liga/desliga; reinicia ao ligar) */
+let t0 = null, tick = null;
+function alternaRelogio() {
+  const r = document.getElementById('relogio');
+  if (t0 === null) {
+    t0 = Date.now(); r.classList.add('on');
+    tick = setInterval(() => {
+      const seg = Math.floor((Date.now() - t0) / 1000);
+      r.textContent = Math.floor(seg / 60) + ':' + String(seg % 60).padStart(2, '0') + ' / 5:00';
+      r.classList.toggle('alerta', seg >= 270);
+    }, 250);
+  } else { clearInterval(tick); t0 = null; r.classList.remove('on', 'alerta'); }
+}
+
+mostra((parseInt(location.hash.slice(1), 10) || 1) - 1);
+</script>
+</body>
+</html>
