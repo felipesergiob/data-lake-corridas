@@ -118,7 +118,7 @@
     </ul>
     <div class="grade g3" style="margin-top:30px">
       <div class="cartao"><div class="valor">518.400</div><div class="rot">eventos · 30 dias × 12 por minuto</div></div>
-      <div class="cartao"><div class="valor">117,6 MB</div><div class="rot">117.584.519 bytes em JSON Lines</div></div>
+      <div class="cartao"><div class="valor">117,6 MB</div><div class="rot">117.584.519 bytes (112,1 MiB) em JSON Lines</div></div>
       <div class="cartao"><div class="valor">1,48%</div><div class="rot">7.688 eventos com vírgula decimal em <code>valor</code></div></div>
     </div>
     <div class="rodape"><span>Grupo 11 · AV1</span><span>2 / 7</span></div>
@@ -162,6 +162,7 @@
       </tbody>
     </table>
     <div class="nota">O teto fica acima do volume medido: a pergunta passa, e uma consulta acidental muito maior é barrada.</div>
+    <div class="nota" style="margin-top:12px"><b>Medido no Athena:</b> sem <code>use.null.for.invalid.data</code> a consulta falhou (<code>BAD_DATA</code>, valor <code>13,61</code>). Com a propriedade no Terraform: <code>count(valor)</code> = 510.712, ou seja, <b>7.688 nulls</b>.</div>
     <div class="rodape"><span>Grupo 11 · AV1</span><span>4 / 7</span></div>
   </section>
 
@@ -170,10 +171,10 @@
     <div class="kicker">04 · Demonstração</div>
     <h2>apply → consulta → custo → destroy</h2>
     <div class="passos">
-      <div class="passo">1 · apply<small>conta limpa, workspace av1</small></div>
-      <div class="passo">2 · dados<small>upload para o S3</small></div>
-      <div class="passo">3 · Athena<small>pergunta de negócio</small></div>
-      <div class="passo">4 · destroy<small>sem órfãos</small></div>
+      <div class="passo">1 · apply<small>9 recursos criados · workspace av1</small></div>
+      <div class="passo">2 · dados<small>518.400 eventos no S3 · 112,1 MiB</small></div>
+      <div class="passo">3 · Athena<small>Boa Viagem · Pina · Recife Antigo</small></div>
+      <div class="passo">4 · destroy<small>9 destruídos · 15/15 · 0 órfãos</small></div>
     </div>
 <pre><span class="k">SELECT</span> bairro,
        <span class="k">count</span>(*)             <span class="k">AS</span> corridas_madrugada,
@@ -184,7 +185,7 @@
 <span class="k">GROUP BY</span> bairro
 <span class="k">ORDER BY</span> receita_madrugada <span class="k">DESC</span>
 <span class="k">LIMIT</span>  5;</pre>
-    <div class="nota">Verificação automática: <code>verificacao/verifica.sh</code> imprime PASSA/FALHA por critério e <code>--pos-destroy</code> confere que nada sobrou.</div>
+    <div class="nota">Evidência: <code>verifica.sh</code> deu <b>6 PASSA · 0 FALHA</b> (60/60) com a stack no ar; <code>--pos-destroy</code> deu <b>15/15</b>, nenhum órfão. Arquivos em <code>evidencias/</code>.</div>
     <div class="rodape"><span>Grupo 11 · AV1</span><span>5 / 7</span></div>
   </section>
 
