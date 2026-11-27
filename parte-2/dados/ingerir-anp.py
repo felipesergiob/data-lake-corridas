@@ -1,27 +1,40 @@
 #!/usr/bin/env python3
 """Ingere a serie historica de precos de combustiveis da ANP (gasolina e etanol).
 
-Para cada mes do intervalo pedido:
+Para cada mes AAAA-MM do intervalo pedido, monta as tres camadas localmente,
+ja no layout de particao que vai para o S3:
 
-1. baixa o CSV mensal listado em fontes-anp.csv para saida/raw/anp/ (o arquivo
-   original, sem alteracao; se ja existir, reaproveita);
-2. limpa e grava saida/trusted/precos/precos-AAAA-MM.json (JSON Lines).
+  raw      saida/raw/anp/ano=AAAA/mes=MM/precos.csv
+           CSV original da ANP, byte a byte (baixa uma vez e reaproveita)
+  trusted  saida/trusted/precos/ano=AAAA/mes=MM/part-0.parquet
+           uma linha por coleta (posto x produto x dia), limpa e sem duplicata
+  refined  saida/refined/precos_uf_mes/ano=AAAA/mes=MM/part-0.parquet
+           agregado por UF x produto x tipo de bandeira no mes
 
-Rodar de novo para o mesmo mes sobrescreve o mesmo arquivo trusted: nao duplica.
+Cada particao tem nome de arquivo fixo e e apagada antes de ser regravada:
+rodar o mesmo mes de novo gera os mesmos arquivos, sem duplicar.
+O carregar.sh faz o mesmo no S3 (apaga o prefixo da particao e copia).
 
 A lista de URLs fica em fontes-anp.csv porque a ANP nao segue um padrao de
 nome entre anos (em 2026 ha nomes sem .csv e ate "cados-abertos").
+
+Requer: Python >= 3.9 e pyarrow (pip install -r requirements.txt).
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import datetime as dt
 import json
+import shutil
 import sys
 import urllib.request
 from collections import Counter
 from pathlib import Path
+
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 AQUI = Path(__file__).resolve().parent
 
@@ -34,6 +47,29 @@ UNIDADE = "R$ / litro"
 PRECO_MIN = 1.00
 PRECO_MAX = 15.00
 CORROMPIDO = "�"
+
+# Schemas Parquet. As colunas de particao (ano, mes) ficam so no caminho.
+SCHEMA_TRUSTED = pa.schema([
+    ("cnpj", pa.string()),
+    ("produto", pa.string()),
+    ("data_coleta", pa.date32()),
+    ("valor_venda", pa.float64()),
+    ("bandeira", pa.string()),
+    ("revenda", pa.string()),
+    ("regiao", pa.string()),
+    ("uf", pa.string()),
+    ("municipio", pa.string()),
+    ("bairro", pa.string()),
+])
+SCHEMA_REFINED = pa.schema([
+    ("uf", pa.string()),
+    ("produto", pa.string()),
+    ("tipo_bandeira", pa.string()),
+    ("coletas", pa.int64()),
+    ("soma_valor", pa.float64()),
+    ("preco_min", pa.float64()),
+    ("preco_max", pa.float64()),
+])
 
 
 def le_fontes(arquivo: Path) -> dict[str, str]:
@@ -49,6 +85,11 @@ def meses(inicio: str, fim: str) -> list[str]:
         saida.append(f"{a:04d}-{m:02d}")
         a, m = (a + 1, 1) if m == 12 else (a, m + 1)
     return saida
+
+
+def particao(mes: str) -> str:
+    ano, mm = mes.split("-")
+    return f"ano={ano}/mes={mm}"
 
 
 def baixa(url: str, destino: Path) -> None:
@@ -69,25 +110,25 @@ def preco(texto: str) -> float | None:
         return None
 
 
-def data_iso(texto: str) -> str | None:
-    """'31/01/2025' -> '2025-01-31'."""
-    partes = texto.strip().split("/")
-    if len(partes) != 3 or not all(p.isdigit() for p in partes):
+def data_coleta(texto: str) -> dt.date | None:
+    """'31/01/2025' -> date(2025, 1, 31)."""
+    try:
+        return dt.datetime.strptime(texto.strip(), "%d/%m/%Y").date()
+    except ValueError:
         return None
-    d, m, a = partes
-    return f"{a}-{m.zfill(2)}-{d.zfill(2)}"
 
 
-def limpa_mes(bruto: Path, destino: Path, mes: str) -> Counter:
+def limpa(bruto: Path, mes: str) -> tuple[list[dict], Counter]:
+    """Le o CSV raw do mes e devolve as linhas trusted (ordenadas) e as contagens."""
     c: Counter = Counter()
+    por_chave: dict[tuple, dict] = {}
+    conflito: set[tuple] = set()
     with bruto.open(encoding="utf-8-sig", newline="") as fh:
         linhas = csv.reader(fh, delimiter=";")
         cab = next(linhas)
         if cab != CABECALHO:
-            raise SystemExit(f"{bruto.name}: cabecalho diferente do esperado: {cab}")
+            raise SystemExit(f"{bruto}: cabecalho diferente do esperado: {cab}")
 
-        por_chave: dict[tuple[str, str, str], dict] = {}
-        conflito: set[tuple[str, str, str]] = set()
         for r in linhas:
             c["linhas_raw"] += 1
             if len(r) != len(CABECALHO):
@@ -110,8 +151,8 @@ def limpa_mes(bruto: Path, destino: Path, mes: str) -> Counter:
             if valor is None or not (PRECO_MIN <= valor <= PRECO_MAX):
                 c["descarte_preco_fora_faixa"] += 1
                 continue
-            data = data_iso(reg["Data da Coleta"])
-            if data is None or not data.startswith(mes):
+            data = data_coleta(reg["Data da Coleta"])
+            if data is None or data.strftime("%Y-%m") != mes:
                 c["descarte_data"] += 1
                 continue
             cnpj = "".join(ch for ch in reg["CNPJ da Revenda"] if ch.isdigit())
@@ -147,16 +188,65 @@ def limpa_mes(bruto: Path, destino: Path, mes: str) -> Counter:
                 del por_chave[chave]
                 c["descarte_conflito"] += 2
 
-    destino.parent.mkdir(parents=True, exist_ok=True)
-    tmp = destino.with_suffix(".part")
-    with tmp.open("w", encoding="utf-8", newline="\n") as fh:
-        for evento in por_chave.values():
-            linha = json.dumps(evento, ensure_ascii=False, separators=(",", ":")) + "\n"
-            c["bytes_trusted"] += len(linha.encode("utf-8"))
-            fh.write(linha)
-    tmp.replace(destino)
-    c["linhas_trusted"] = len(por_chave)
+    linhas = sorted(por_chave.values(),
+                    key=lambda e: (e["uf"], e["produto"], e["data_coleta"], e["cnpj"]))
+    c["linhas_trusted"] = len(linhas)
+    return linhas, c
+
+
+def agrega(linhas: list[dict]) -> list[dict]:
+    """Refined: UF x produto x tipo de bandeira (BRANCA ou BANDEIRA) no mes.
+
+    Guarda soma e contagem (nao a media) para que a media de varios meses
+    seja exata: sum(soma_valor) / sum(coletas).
+    """
+    grupos: dict[tuple, dict] = {}
+    for e in linhas:
+        tipo = "BRANCA" if e["bandeira"] == "BRANCA" else "BANDEIRA"
+        g = grupos.setdefault((e["uf"], e["produto"], tipo), {
+            "uf": e["uf"], "produto": e["produto"], "tipo_bandeira": tipo,
+            "coletas": 0, "soma_valor": 0.0, "preco_min": e["valor_venda"],
+            "preco_max": e["valor_venda"],
+        })
+        g["coletas"] += 1
+        g["soma_valor"] += e["valor_venda"]
+        g["preco_min"] = min(g["preco_min"], e["valor_venda"])
+        g["preco_max"] = max(g["preco_max"], e["valor_venda"])
+    for g in grupos.values():
+        g["soma_valor"] = round(g["soma_valor"], 2)
+    return [grupos[k] for k in sorted(grupos)]
+
+
+def grava_parquet(linhas: list[dict], schema: pa.Schema, pasta: Path) -> int:
+    """Apaga a particao e grava part-0.parquet. Devolve o tamanho em bytes."""
+    if pasta.exists():
+        shutil.rmtree(pasta)
+    pasta.mkdir(parents=True)
+    tabela = pa.Table.from_pylist(linhas, schema=schema)
+    destino = pasta / "part-0.parquet"
+    pq.write_table(tabela, destino, compression="snappy")
+    return destino.stat().st_size
+
+
+def processa_mes(mes: str, url: str, saida: Path, rebaixar: bool) -> Counter:
+    part = particao(mes)
+    bruto = saida / "raw" / "anp" / part / "precos.csv"
+    if rebaixar or not bruto.exists():
+        print(f"{mes}  baixando {url}", file=sys.stderr)
+        baixa(url, bruto)
+
+    linhas, c = limpa(bruto, mes)
+    refined = agrega(linhas)
     c["bytes_raw"] = bruto.stat().st_size
+    c["bytes_trusted"] = grava_parquet(linhas, SCHEMA_TRUSTED, saida / "trusted" / "precos" / part)
+    c["bytes_refined"] = grava_parquet(refined, SCHEMA_REFINED,
+                                       saida / "refined" / "precos_uf_mes" / part)
+    c["linhas_refined"] = len(refined)
+
+    # Contagens do mes ficam fora das camadas (nao sobem para o S3).
+    contagens = saida / "contagens" / f"{mes}.json"
+    contagens.parent.mkdir(parents=True, exist_ok=True)
+    contagens.write_text(json.dumps(dict(sorted(c.items())), indent=2) + "\n", encoding="utf-8")
     return c
 
 
@@ -181,29 +271,27 @@ def main(argv: list[str] | None = None) -> int:
 
     total: Counter = Counter()
     for mes in lista:
-        bruto = args.saida / "raw" / "anp" / f"precos-{mes}.csv"
-        if args.rebaixar or not bruto.exists():
-            print(f"{mes}  baixando {fontes[mes]}", file=sys.stderr)
-            baixa(fontes[mes], bruto)
-        c = limpa_mes(bruto, args.saida / "trusted" / "precos" / f"precos-{mes}.json", mes)
+        c = processa_mes(mes, fontes[mes], args.saida, args.rebaixar)
         total.update(c)
         print(f"{mes}  raw={fmt(c['linhas_raw'])}  trusted={fmt(c['linhas_trusted'])}  "
-              f"descartes={fmt(c['linhas_raw'] - c['linhas_trusted'])}")
+              f"descartes={fmt(c['linhas_raw'] - c['linhas_trusted'])}  "
+              f"refined={fmt(c['linhas_refined'])}")
 
-    raw = total["linhas_raw"]
+    raw = total["linhas_raw"] or 1
     print()
     print(f"meses ................... {len(lista)} ({lista[0]} a {lista[-1]})")
-    print(f"linhas raw .............. {fmt(raw)}  ({fmt(total['bytes_raw'])} bytes CSV)")
-    print(f"linhas trusted .......... {fmt(total['linhas_trusted'])}  ({fmt(total['bytes_trusted'])} bytes JSON Lines)")
+    print(f"raw (CSV) ............... {fmt(total['linhas_raw'])} linhas  {fmt(total['bytes_raw'])} bytes")
+    print(f"trusted (Parquet) ....... {fmt(total['linhas_trusted'])} linhas  {fmt(total['bytes_trusted'])} bytes")
+    print(f"refined (Parquet) ....... {fmt(total['linhas_refined'])} linhas  {fmt(total['bytes_refined'])} bytes")
     print("sujeira encontrada (nao descarta):")
     for k in ("virgula_decimal", "cnpj_com_espaco", "texto_corrompido", "valor_compra_preenchido"):
         print(f"  {k:<28} {fmt(total[k]):>10}  ({100 * total[k] / raw:.2f}%)")
     print("descartes:")
-    for k in sorted(k for k in total if k.startswith("descarte_")):
+    descartes = sorted(k for k in total if k.startswith("descarte_"))
+    for k in descartes:
         print(f"  {k:<28} {fmt(total[k]):>10}  ({100 * total[k] / raw:.3f}%)")
-    print()
-    print("suba com:")
-    print("  aws s3 cp saida/trusted/precos/ s3://BUCKET/trusted/precos/ --recursive --region us-east-1")
+    if not descartes:
+        print("  nenhum")
     return 0
 
 

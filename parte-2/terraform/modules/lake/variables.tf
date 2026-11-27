@@ -3,12 +3,12 @@ variable "grupo" {
   description = "Grupo no formato gNN."
 }
 
-variable "trusted_prefix" {
-  type        = string
-  description = "Prefixo S3 da tabela trusted."
-}
-
 variable "teto_bytes" {
   type        = number
   description = "BytesScannedCutoffPerQuery do Athena."
+}
+
+variable "anos_projecao" {
+  type        = string
+  description = "Faixa de anos da partition projection, no formato \"inicio,fim\"."
 }

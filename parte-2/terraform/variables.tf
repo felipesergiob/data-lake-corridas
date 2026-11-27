@@ -32,14 +32,14 @@ variable "projeto" {
   description = "Nome do projeto usado nas tags obrigatorias."
 }
 
-variable "trusted_prefix" {
+variable "anos_projecao" {
   type        = string
-  default     = "trusted/precos/"
-  description = "Prefixo S3 da tabela trusted de precos."
+  default     = "2023,2026"
+  description = "Anos cobertos pela partition projection (\"inicio,fim\"); a fonte da ANP tem 2023-01 a 2026-10."
 
   validation {
-    condition     = can(regex("^[A-Za-z0-9/_-]+/$", var.trusted_prefix))
-    error_message = "O prefixo deve conter apenas letras, numeros, /, _ e -, terminando com /."
+    condition     = can(regex("^[0-9]{4},[0-9]{4}$", var.anos_projecao))
+    error_message = "Use o formato AAAA,AAAA, por exemplo 2023,2026."
   }
 }
 
@@ -52,4 +52,22 @@ variable "teto_bytes" {
     condition     = var.teto_bytes >= 10485760
     error_message = "O Athena exige teto de pelo menos 10485760 bytes."
   }
+}
+
+variable "meta_bytes_consulta" {
+  type        = number
+  default     = 1048576
+  description = "Meta declarada de DataScannedInBytes da pergunta de negocio (1 MiB). Conferida pelo verifica.sh."
+}
+
+variable "gerenciar_admins_lf" {
+  type        = bool
+  default     = false
+  description = "Se true, o Terraform define os admins do Lake Formation da CONTA INTEIRA (e zera a lista no destroy). Deixe false em conta compartilhada."
+}
+
+variable "admins_lf_extras" {
+  type        = list(string)
+  default     = []
+  description = "ARNs que continuam admins do Lake Formation quando gerenciar_admins_lf = true (por exemplo, o do docente)."
 }

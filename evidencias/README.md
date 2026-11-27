@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | `verifica-parte-2.txt` | `./evidencias/coletar-evidencias.sh` | stack no ar e dados no S3 |
 | `consulta-athena-parte-2.txt` | `./evidencias/coletar-evidencias.sh` | idem (QueryExecutionId, bytes, custo) |
+| `medicoes-parte-2.txt` | `./evidencias/coletar-evidencias.sh` | idem (M1 a M5 do `DECISOES.md`) |
 | `verifica-parte-2-pos-destroy.txt` | `./evidencias/coletar-evidencias.sh --pos-destroy` | depois do `terraform destroy` |
 
 Ordem:

@@ -1,33 +1,54 @@
-# Parte 2 — preços de combustíveis (ANP)
+# Parte 2 (AV2) — preços de combustíveis (ANP)
 
-Data Lake do grupo 11 com o novo tema da unidade 2: preços de gasolina e etanol
+Data Lake do grupo 11 com o tema da unidade 2: preços de gasolina e etanol
 coletados pela ANP nos postos do Brasil.
 
 **Pergunta de negócio:** em quais estados a gasolina comum é mais cara, e os
 postos com bandeira cobram mais que os de bandeira branca?
 
-Esta pasta começa como a migração da Parte 1 para o novo tema, com a mesma
-infraestrutura. Os requisitos da AV2 (camadas raw/trusted/refined, Parquet
-particionado, ingestão idempotente com backfill e Lake Formation) entram aqui
-em seguida.
-
 ## O que sobe
 
-- Bucket S3 `eda262-g11-lake-trusted` para os dados da tabela trusted.
-- Bucket S3 `eda262-g11-athena-results` para os resultados do Athena.
-- Glue database `eda262_g11`.
-- Glue table `precos_trusted`, com 10 colunas declaradas no Terraform e sem Crawler.
+Módulo `lake` (`terraform/modules/lake/`):
+
+- Buckets `eda262-g11-lake-raw`, `eda262-g11-lake-trusted`,
+  `eda262-g11-lake-refined` e `eda262-g11-athena-results`.
+- Um Glue database por camada (`eda262_g11_raw`, `_trusted` e `_refined`) com
+  as tabelas `precos_raw` (CSV), `precos` (Parquet) e `precos_uf_mes`
+  (Parquet). Todas têm schema declarado e partição `ano`/`mes` por partition
+  projection.
 - Athena workgroup `eda262-g11-athena-wg`, com teto de 256 MiB por consulta.
-- Backend remoto do Terraform em S3, com trava no DynamoDB, configurado por `backend.hcl`.
 
-Região obrigatória: `us-east-1` (N. Virginia).
+Módulo `acesso` (`terraform/modules/acesso/`):
 
-Os nomes dos recursos são os mesmos da Parte 1. Se a stack da Parte 1 ainda
-estiver no ar, faça o `destroy` dela antes.
+- Os 3 buckets registrados no Lake Formation, com o papel `eda262-g11-lf-registro`.
+- `IAM_ALLOWED_PRINCIPALS` revogado dos databases e tabelas da stack, via AWS CLI.
+- Papéis `eda262-g11-engenharia` (raw e trusted) e `eda262-g11-analista`
+  (só refined), com SELECT concedido pelo Lake Formation.
+
+Região obrigatória: `us-east-1` (N. Virginia). As decisões e os números estão
+no `DECISOES.md`.
+
+## Antes do primeiro apply: Lake Formation
+
+1. **Quem roda o apply precisa ser admin do Lake Formation** na conta (console
+   do Lake Formation → Administrative roles and tasks). Sem isso, o registro
+   dos buckets e as concessões falham.
+2. **Não ligue `gerenciar_admins_lf`** se a conta for compartilhada com outros
+   grupos ou com o docente. Esse recurso substitui a lista de admins da conta
+   inteira, e o `destroy` dele zera a lista. Ele existe só para conta exclusiva:
+
+   ```hcl
+   # terraform.tfvars, SO em conta exclusiva do grupo
+   gerenciar_admins_lf = true
+   admins_lf_extras    = ["arn:aws:iam::<conta>:role/<admin-que-deve-continuar>"]
+   ```
+3. O apply roda `modules/acesso/revoga-iam-allowed.sh` com `bash` e a AWS CLI.
+   No Windows, rode o Terraform pelo Git Bash.
 
 ## Pré-requisitos
 
-- AWS CLI v2, Terraform >= 1.5 e Python >= 3.9 (só biblioteca padrão).
+- AWS CLI v2, Terraform >= 1.5, bash.
+- Python >= 3.9 com `pyarrow`: `pip install -r parte-2/dados/requirements.txt`.
 - Credenciais da disciplina no terminal (veja `parte-1/README.md`, seção Credenciais).
 
 ## Backend remoto
@@ -37,9 +58,10 @@ cd parte-2/terraform
 cp backend.hcl.example backend.hcl
 ```
 
-O estado usa o mesmo bucket `eda262-g11-tfstate` da Parte 1, com outra chave:
-`parte-2/terraform.tfstate`. Se o bucket não existir, crie-o como descrito em
-`parte-1/README.md`.
+O estado usa o mesmo bucket `eda262-g11-tfstate` da Parte 1, com a chave
+`parte-2/terraform.tfstate`. Se a stack da Parte 1 ainda estiver no ar, faça o
+`destroy` dela antes, porque o bucket `eda262-g11-lake-trusted` e o workgroup
+têm o mesmo nome.
 
 ## Deploy
 
@@ -52,27 +74,28 @@ terraform validate
 terraform apply -auto-approve
 ```
 
-## Ingerir e subir os dados
+## Carga base e backfill
+
+Na raiz do repositório:
 
 ```bash
-cd ../dados
-python3 ingerir-anp.py --inicio 2025-01 --fim 2025-12
-
-cd ../terraform
-BUCKET=$(terraform output -raw lake_bucket_name)
-aws s3 cp ../dados/saida/trusted/precos/ "s3://$BUCKET/trusted/precos/" --recursive --region us-east-1
+./parte-2/dados/carregar.sh 2025-01 2025-12   # carga base: 12 particoes
+./parte-2/dados/carregar.sh 2024-06           # backfill de uma particao
 ```
 
-O script baixa um CSV por mês para `saida/raw/anp/`, usando os links de
-`fontes-anp.csv`, e grava a versão limpa em `saida/trusted/precos/precos-AAAA-MM.json`.
-Rodar de novo para o mesmo mês sobrescreve o mesmo arquivo. A medição de
-2025-01 a 2025-12 foi de 555.836 linhas e 128.703.128 bytes. As regras de
-limpeza estão no `DECISOES.md` (decisão 03).
+Para cada mês, o `carregar.sh`:
 
-## Consulta da pergunta de negócio
+1. roda `ingerir-anp.py`, que baixa o CSV da ANP (ou reaproveita o que já foi
+   baixado) e monta localmente `saida/{raw,trusted,refined}/.../ano=AAAA/mes=MM/`;
+2. em cada camada, apaga o prefixo da partição no S3 e copia a partição local.
 
-`consultas/pergunta-negocio.sql`. Rode no workgroup `eda262-g11-athena-wg` e
-registre `DataScannedInBytes`:
+Rodar de novo o mesmo mês deixa os mesmos objetos, sem duplicar.
+
+## Consultas
+
+- `consultas/pergunta-negocio.sql`: a pergunta de negócio, rodada na refined
+  (database `eda262_g11_refined`).
+- `consultas/medicoes.sql`: as medições M1 a M5 citadas no `DECISOES.md`.
 
 ```text
 custo_usd = DataScannedInBytes / 1099511627776 * 5
@@ -80,11 +103,13 @@ custo_usd = DataScannedInBytes / 1099511627776 * 5
 
 ## Verificação, evidências e destroy
 
-Na raiz do repositório:
-
 ```bash
-./evidencias/coletar-evidencias.sh                # verifica.sh + consulta Athena com custo
+./evidencias/coletar-evidencias.sh                # verifica.sh + pergunta + medicoes
 
 cd parte-2/terraform && terraform destroy -auto-approve && cd ../..
 ./evidencias/coletar-evidencias.sh --pos-destroy  # confere que nao sobrou recurso
 ```
+
+O `verifica.sh` recarrega 2024-06 para testar a idempotência, o que precisa de
+Python, `pyarrow` e acesso à internet. Para pular essa etapa, use
+`./verificacao/verifica.sh --sem-recarga`.

@@ -1,10 +1,12 @@
 # Parte 1 - AV1
 
-> **Registro da entrega da AV1.** Na unidade 2 o projeto trocou de tema e passou
-> a usar os preços de combustíveis da ANP; o trabalho atual está em `parte-2/`.
-> As decisões desta parte estão em `parte-1/DECISOES.md`. O `verificacao/verifica.sh`
-> e o `evidencias/coletar-evidencias.sh` da raiz agora apontam para a `parte-2/`;
-> as versões da AV1 estão no commit `bb5c188`.
+> **Registro da entrega da AV1** (tag `av1-entrega`). O docente pediu a troca de
+> tema na unidade 2 porque o dataset de corridas era o mesmo usado nos exercícios
+> em sala. O projeto passou a usar os preços de combustíveis da ANP, e o trabalho
+> atual está em `parte-2/`. As decisões desta parte estão em `parte-1/DECISOES.md`.
+>
+> Na `main`, o `verificacao/verifica.sh` e o `evidencias/coletar-evidencias.sh`
+> verificam a `parte-2/`. Para reproduzir a AV1, use a tag (seção Verificação).
 
 Data Lake da AV1 do grupo 11 para o cenário de corridas urbanas.
 
@@ -124,27 +126,31 @@ custo_usd = DataScannedInBytes / 1099511627776 * 5
 
 ## Verificação
 
+O `verifica.sh` da `main` verifica a `parte-2/`. **Não** rode o da `main` com
+`tee` para `evidencias/verifica-av1.txt`: isso sobrescreveria a evidência da AV1.
+Para verificar a AV1, use a versão do script que está na tag:
+
 ```bash
-cd verificacao
-./verifica.sh | tee ../evidencias/verifica-av1.txt
+git worktree add ../av1 av1-entrega
+cd ../av1/verificacao
+./verifica.sh                 # com a stack da AV1 no ar
 ```
 
-O arquivo `evidencias/verifica-av1.txt` deve ser commitado depois que a AWS responder com sucesso.
+As evidências da AV1 (`evidencias/verifica-av1.txt`,
+`evidencias/consulta-athena-av1.txt` e `evidencias/verifica-av1-pos-destroy.txt`)
+foram geradas na entrega e não devem ser regeradas na `main`.
 
 ## Destroy limpo
 
-Depois do destroy:
-
 ```bash
-cd ../parte-1/terraform
+cd ../av1/parte-1/terraform
 terraform destroy -auto-approve
 
 cd ../../verificacao
-./verifica.sh --pos-destroy | tee ../evidencias/verifica-av1-pos-destroy.txt
+./verifica.sh --pos-destroy
 ```
 
-O arquivo `evidencias/verifica-av1-pos-destroy.txt` também deve ser commitado.
-
+Ao terminar: `git worktree remove ../av1`.
 
 ## Entrega
 
