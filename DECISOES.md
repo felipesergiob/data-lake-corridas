@@ -1,86 +1,130 @@
-# DECISOES.md — Projeto AV1
+# DECISOES.md — Projeto (tema: preços de combustíveis)
 
-Cenario: corridas urbanas em Recife. Pergunta de negocio: quais bairros
-concentram maior receita de corridas na madrugada?
+Na unidade 2, a pedido do docente, o projeto trocou de tema e de dataset.
+O tema de corridas urbanas da AV1 está registrado em `parte-1/` e em
+`parte-1/DECISOES.md`.
 
-Medicao local do gerador em 2026-10-04:
+**Cenário:** preços de gasolina e etanol nos postos do Brasil, coletados pela
+ANP no Levantamento de Preços de Combustíveis.
 
-- comando: `python3 parte-1/dados/gerar-corridas.py --dias 30 --taxa 12 --seed 42 --saida /private/tmp/eda-av1-medicao`
-- janela: 2026-09-05 a 2026-10-04
-- eventos: 518.400
-- arquivo JSON Lines: 117.584.519 bytes
-- `valor` com virgula decimal: 7.688 eventos, 1,48%
+**Pergunta de negócio:** em quais estados a gasolina comum é mais cara, e os
+postos com bandeira cobram mais que os de bandeira branca?
 
-## DECISAO 01 — grao da tabela trusted
+**Fonte:** ANP, "Série histórica de preços de combustíveis", com um CSV por mês
+(gasolina e etanol). Os links de cada mês estão em `parte-2/dados/fontes-anp.csv`
+(de 2023-01 a 2026-10, 46 meses). A lista existe porque a ANP não mantém um
+padrão de nome: em 2026 há arquivos sem `.csv` e até um com `cados-abertos` no
+nome.
 
-A tabela `corridas_trusted` tem grao de **uma linha por corrida finalizada**. O
-gerador cria 30 dias x 12 eventos por minuto x 1.440 minutos = **518.400
-eventos**, e cada evento recebe um `corrida_id` sequencial (`c-00000001` etc.).
+Medição local da ingestão, feita em 2026-11-26:
 
-Aceitamos nao modelar eventos intermediarios da corrida na AV1, como solicitacao,
-aceite e cancelamento. Isso deixa a pergunta de receita por bairro direta e
-mantem o escopo dentro do que foi cobrado na primeira unidade.
+- comando: `python3 parte-2/dados/ingerir-anp.py --inicio 2025-01 --fim 2025-12`
+- janela: 2025-01 a 2025-12 (12 meses)
+- raw: **555.836 linhas**, 95.168.702 bytes em CSV
+- trusted: **555.836 linhas**, **128.703.128 bytes** em JSON Lines
+- produtos: GASOLINA 212.411 · ETANOL 177.742 · GASOLINA ADITIVADA 165.683
 
-## DECISAO 02 — chave logica
+## DECISAO 01 — grão da tabela trusted
 
-A chave logica da tabela e `corrida_id`. `motorista_id`, `passageiro_id` e
-`bairro` ficam como atributos analiticos, nao como parte da chave. No dataset
-medido, o esperado e `count(*) = 518400` e `count(distinct corrida_id) =
-518400`.
+A tabela `precos_trusted` tem grão de **uma linha por coleta de preço: posto ×
+produto × dia**. É o grão do próprio arquivo da ANP: cada linha do CSV é um
+preço que o pesquisador anotou num posto, para um produto, numa data.
 
-Consulta de comprovacao rodada no Athena:
+Não agregamos na trusted (por exemplo, para preço médio por município e
+semana) porque a pergunta compara bandeira branca com bandeira dentro do mesmo
+estado. Agregar antes perderia a bandeira de cada posto. Em 2025, a pergunta
+usa **212.411 coletas** de gasolina comum.
+
+## DECISAO 02 — chave lógica
+
+A chave lógica é composta: `cnpj` + `produto` + `data_coleta`. Um posto não tem
+dois preços oficiais do mesmo produto no mesmo dia.
+
+Medido localmente em 2025: **555.836 linhas e 555.836 chaves distintas**, sem
+duplicata.
+
+Medido em 2023–2024 (1.221.656 linhas), a fonte tem duplicatas reais, todas em
+**2024-06**:
+
+- **8 linhas** repetidas de forma idêntica: mantemos uma e descartamos a cópia;
+- **4 pares (8 linhas)** com a mesma chave e preços diferentes: descartamos as
+  duas versões, porque não há como saber qual vale.
+
+Esses 16 descartes são **0,001%** da janela. O mês 2024-06 será o backfill da
+AV2, justamente porque exercita essa regra.
+
+Consulta de comprovação no Athena:
 
 ```sql
 SELECT count(*) AS linhas,
-       count(distinct corrida_id) AS corridas_distintas
-FROM corridas_trusted;
+       count(DISTINCT (cnpj, produto, data_coleta)) AS chaves_distintas
+FROM precos_trusted;
 ```
 
-Resultado medido: **518.400 linhas e 518.400 corridas distintas**, sem
-duplicata. Foram 112,14 MB examinados (117.584.519 bytes) em 1,1 s.
+Resultado no Athena: **PENDENTE** (rodar com a stack no ar; o esperado é 555.836 / 555.836).
 
-## DECISAO 03 — formato e schema declarado
+## DECISAO 03 — formato, schema declarado e limpeza
 
-Mantemos JSON Lines com schema declarado no Terraform, sem Crawler. O schema tem
-9 colunas: `corrida_id`, `motorista_id`, `passageiro_id`, `bairro`,
-`data_corrida`, `fim`, `distancia_km`, `duracao_min` e `valor`.
+A trusted continua em **JSON Lines** com schema declarado no Terraform (sem
+Crawler), igual à AV1. A troca para Parquet é requisito da AV2 e entra em
+seguida. São 10 colunas: `cnpj`, `produto`, `data_coleta` (date), `valor_venda`
+(double), `bandeira`, `revenda`, `regiao`, `uf`, `municipio` e `bairro`.
 
-`valor` foi declarado como `double` para permitir soma direta na pergunta de
-negocio. O custo aceito e que os **7.688 eventos (1,48%)** em que o produtor
-envia decimal com virgula virem `null` no Athena. Preferimos esse custo medido a
-obrigar todo SQL a fazer `cast(replace(valor, ',', '.') as double)`.
+A limpeza fica na ingestão (`ingerir-anp.py`), não no SQL. Assim, a trusted só
+recebe dado válido. Sujeira medida no raw de 2025:
 
-Medido no Athena: sem configuracao extra, a consulta **falhou** com `BAD_DATA`
-(`Error parsing column 'valor' with value '13,61'`, QueryExecutionId
-`823ee85e-9d3a-4378-9131-14732b1782b7`). Com `use.null.for.invalid.data = true`
-na tabela (declarado no Terraform), `count(*) = 518.400` e
-`count(valor) = 510.712`, ou seja, **7.688 nulls**, exatamente os 1,48%
-medidos no gerador.
+| Sujeira na fonte | Linhas | % | Tratamento |
+| --- | ---: | ---: | --- |
+| preço com vírgula decimal (`6,29`) | 555.836 | 100% | vira `double` 6.29 |
+| CNPJ com espaço à esquerda e máscara | 555.836 | 100% | só os 14 dígitos |
+| data em `dd/mm/aaaa` | 555.836 | 100% | vira `date` ISO |
+| `Valor de Compra` vazio | 555.836 | 100% | coluna descartada |
+| `Unidade de Medida` constante (`R$ / litro`) | 555.836 | 100% | coluna descartada |
 
-## DECISAO 04 — sem particionamento na AV1
+Em 2023–2024 também apareceram preços sem as duas casas decimais (`5,9` e
+`6`, por exemplo 917 e 79 linhas em 2024-06). O parser aceita os dois formatos.
+Preço fora da faixa de R$ 1,00 a R$ 15,00 por litro é descartado: **0 linhas**
+nos 36 meses medidos (1.777.476 linhas; mínimo de R$ 2,63 e máximo de R$ 9,79).
 
-A AV1 fica sem particao no Glue e sem pastas `dt=`, porque o guia declara
-particionamento como fora de escopo da Parte 1. Todos os dados ficam em
-`s3://eda262-g11-lake-trusted/trusted/corridas/`.
+Custo aceito: o JSON ficou **35% maior** que o CSV original (128.703.128 contra
+95.168.702 bytes), porque repete o nome das colunas em cada linha. A AV2 resolve
+isso com Parquet.
 
-O custo aceito e que a consulta por madrugada varra o arquivo inteiro de
-**117.584.519 bytes**. Medido no Athena, a consulta da pergunta de negocio
-examinou **117.587.268 bytes** (o arquivo inteiro, sem poda), a um custo de
-**US$ 0,00053472** usando US$ 5/TB.
+A tabela **não** usa `use.null.for.invalid.data`, ao contrário da AV1. Como a
+limpeza acontece antes, um valor inválido na trusted indica bug na ingestão, e
+preferimos que o Athena falhe com `BAD_DATA` a esconder o erro como `null`.
+
+Limitação conhecida e não tratada: o bairro é texto livre da ANP e tem erros de
+digitação (por exemplo, `IMBIRIRBEIRA` ao lado de `IMBIRIBEIRA` no Recife). A
+pergunta de negócio agrega por estado, então isso não afeta a resposta.
+
+## DECISAO 04 — ainda sem particionamento
+
+A ingestão grava **um arquivo por mês** (`trusted/precos/precos-AAAA-MM.json`),
+todos no mesmo prefixo e sem partição no Glue. Rodar o mesmo mês de novo
+sobrescreve o mesmo arquivo, então a carga não duplica.
+
+O custo aceito é que toda consulta varre os 12 arquivos inteiros (**128.703.128
+bytes**), mesmo que filtre um único mês. Particionar por ano e mês é o próximo
+passo da AV2.
 
 ## DECISAO 05 — teto de custo no Athena
 
-O workgroup usa `BytesScannedCutoffPerQuery = 268435456` bytes (256 MiB). Esse
-teto e maior que o dataset medido (**117.584.519 bytes**), entao a pergunta de
-negocio passa, mas ainda impede consultas acidentais muito acima do volume
-esperado da AV1.
+O workgroup mantém `BytesScannedCutoffPerQuery = 268435456` bytes (256 MiB). O
+dataset de 2025 ocupa **47,9%** desse teto: a pergunta passa, e uma consulta
+acidental muito acima do volume esperado é barrada.
 
-Medido na consulta da pergunta de negocio (`evidencias/consulta-athena-av1.txt`):
+Custo esperado da pergunta de negócio, sem poda:
+`128703128 / 1099511627776 * 5` = **US$ 0,00058527**.
 
-- `QueryExecutionId`: `34753c1e-c6cc-46a6-8790-a14567e37774`
-- `DataScannedInBytes`: **117.587.268** (43,8% do teto de 268.435.456)
-- tempo de execucao: 1,8 s
-- custo: `117587268 / 1099511627776 * 5` = **US$ 0,00053472**
+Medido no Athena (`evidencias/consulta-athena-parte-2.txt`): **PENDENTE**.
 
-Resposta: Boa Viagem lidera a receita de madrugada (8.564 corridas, R$ 138.210,00),
-seguida de Pina (R$ 55.760,10) e Recife Antigo (R$ 46.907,49).
+- `QueryExecutionId`: PENDENTE
+- `DataScannedInBytes`: PENDENTE
+- tempo de execução: PENDENTE
+
+Resposta esperada, calculada localmente sobre a trusted: o **Acre** tem a
+gasolina comum mais cara (R$ 7,671), seguido de Amazonas (R$ 7,226) e Roraima
+(R$ 6,948). A bandeira nem sempre cobra mais: no Amazonas, os postos com
+bandeira são **R$ 0,605 mais baratos** que os de bandeira branca. Em
+Pernambuco, a média é R$ 6,330 e os postos com bandeira cobram R$ 0,076 a mais.

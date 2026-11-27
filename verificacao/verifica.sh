@@ -2,7 +2,8 @@
 set -uo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
-TFDIR="${TFDIR:-$RAIZ/parte-1/terraform}"
+TFDIR="${TFDIR:-$RAIZ/parte-2/terraform}"
+SQLFILE="${SQLFILE:-$RAIZ/parte-2/consultas/pergunta-negocio.sql}"
 DECISOES="${DECISOES:-$RAIZ/DECISOES.md}"
 REGIAO="${AWS_REGION:-us-east-1}"
 POS=0
@@ -43,18 +44,8 @@ if [ "$POS" != "1" ] && ! command -v terraform >/dev/null 2>&1; then
 fi
 
 consulta_negocio() {
-  cat <<'SQL'
-SELECT
-  bairro,
-  count(*) AS corridas_madrugada,
-  round(sum(valor), 2) AS receita_madrugada
-FROM corridas_trusted
-WHERE substr(data_corrida, 12, 2) BETWEEN '00' AND '05'
-  AND valor IS NOT NULL
-GROUP BY bairro
-ORDER BY receita_madrugada DESC
-LIMIT 5
-SQL
+  # mesma consulta versionada em parte-2/consultas, sem comentarios e sem o ';' final
+  grep -v '^[[:space:]]*--' "$SQLFILE" | sed 's/;[[:space:]]*$//'
 }
 
 roda_query() {
@@ -82,15 +73,15 @@ roda_query() {
 }
 
 if [ "$POS" = "1" ]; then
-  echo "${B}AV1 — destroy limpo (regiao $REGIAO)${X}"; linha
+  echo "${B}Parte 2 — destroy limpo (regiao $REGIAO)${X}"; linha
   orfaos="$(aws s3 ls --region "$REGIAO" 2>/dev/null | grep -E "${PREFIXO}-(lake-trusted|athena-results)\b" || true)"
   db="$(aws glue get-database --region "$REGIAO" --name "eda262_${GRUPO}" --query "Database.Name" --output text 2>/dev/null || true)"
   wg="$(aws athena list-work-groups --region "$REGIAO" --query "WorkGroups[?Name=='${PREFIXO}-athena-wg'].Name | [0]" --output text 2>/dev/null || true)"
 
   if [ -z "$orfaos" ] && { [ -z "$db" ] || [ "$db" = "None" ]; } && { [ -z "$wg" ] || [ "$wg" = "None" ]; }; then
-    pass "5" 15 "nenhum bucket, database ou workgroup orfao da AV1."
+    pass "5" 15 "nenhum bucket, database ou workgroup orfao."
   else
-    fail "5" 15 "sobraram recursos da AV1."
+    fail "5" 15 "sobraram recursos do projeto."
     [ -n "$orfaos" ] && printf '%s\n' "$orfaos"
     [ -n "$db" ] && [ "$db" != "None" ] && info "database ainda existe: $db"
     [ -n "$wg" ] && [ "$wg" != "None" ] && info "workgroup ainda existe: $wg"
@@ -100,11 +91,11 @@ if [ "$POS" = "1" ]; then
   exit 0
 fi
 
-echo "${B}AV1 — verificacao do projeto (regiao $REGIAO)${X}"; linha
+echo "${B}Parte 2 — verificacao do projeto (regiao $REGIAO)${X}"; linha
 
 echo "${B}Criterio 0 — estrutura local da entrega${X}"
 if [ ! -f "$TFDIR/main.tf" ]; then
-  fail "0" 0 "nao achei parte-1/terraform/main.tf."; exit 2
+  fail "0" 0 "nao achei parte-2/terraform/main.tf."; exit 2
 fi
 if ! grep -rqE '^\s*module\s+"' "$TFDIR"/*.tf 2>/dev/null; then
   fail "0" 0 "nao achei module na raiz Terraform."; exit 2
@@ -113,20 +104,20 @@ if ! grep -rqE 'backend\s+"s3"' "$TFDIR"/*.tf 2>/dev/null; then
   fail "0" 0 "nao achei backend s3."; exit 2
 fi
 if grep -rqE --include='*.tf' 'aws_glue_crawler|AWS::Glue::Crawler' "$TFDIR" 2>/dev/null; then
-  fail "0" 0 "ha Crawler na entrega; a AV1 pede schema declarado."; exit 2
+  fail "0" 0 "ha Crawler na entrega; o projeto pede schema declarado."; exit 2
 fi
-if grep -rqE --include='*.tf' 'aws_glue_partition|partition_keys' "$TFDIR" 2>/dev/null; then
-  fail "0" 0 "ha particionamento no Terraform; particionamento esta fora da AV1."; exit 2
+if [ ! -f "$SQLFILE" ]; then
+  fail "0" 0 "nao achei a consulta em $SQLFILE."; exit 2
 fi
-pass "0" 0 "Terraform modular, backend s3, schema declarado e sem particionamento."
+pass "0" 0 "Terraform modular, backend s3, schema declarado e consulta versionada."
 linha
 
 echo "${B}Criterio 1 — workspace e backend remoto${X}"
 ws="$(terraform -chdir="$TFDIR" workspace show 2>/dev/null || true)"
-if [ "$ws" = "av1" ]; then
-  pass "1" 10 "workspace av1 ativo."
+if [ "$ws" = "av2" ]; then
+  pass "1" 10 "workspace av2 ativo."
 else
-  fail "1" 10 "workspace atual: ${ws:-indisponivel}; esperado: av1."
+  fail "1" 10 "workspace atual: ${ws:-indisponivel}; esperado: av2."
 fi
 if [ -f "$TFDIR/terraform.tfstate" ] && grep -q '"resources"' "$TFDIR/terraform.tfstate" 2>/dev/null; then
   fail "1b" 0 "ha terraform.tfstate local com recursos; migre para backend remoto."
@@ -150,7 +141,7 @@ if [ -n "$faltou" ]; then
   fail "2" 15 "faltaram outputs:$faltou"
 else
   info "bucket=$BUCKET results=$RESULTS db=$DB table=$TABLE wg=$WG teto=$TETO"
-  if [ "$BUCKET" = "${PREFIXO}-lake-trusted" ] && [ "$RESULTS" = "${PREFIXO}-athena-results" ] && [ "$DB" = "eda262_${GRUPO}" ] && [ "$TABLE" = "corridas_trusted" ] && [ "$WG" = "${PREFIXO}-athena-wg" ]; then
+  if [ "$BUCKET" = "${PREFIXO}-lake-trusted" ] && [ "$RESULTS" = "${PREFIXO}-athena-results" ] && [ "$DB" = "eda262_${GRUPO}" ] && [ "$TABLE" = "precos_trusted" ] && [ "$WG" = "${PREFIXO}-athena-wg" ]; then
     pass "2" 15 "outputs existem e seguem eda262-gNN."
   else
     fail "2" 15 "outputs existem, mas algum nome foge do padrao."
@@ -172,16 +163,16 @@ location="$(aws glue get-table --region "$REGIAO" --database-name "$DB" --name "
 grain="$(aws glue get-table --region "$REGIAO" --database-name "$DB" --name "$TABLE" --query "Table.Parameters.grain" --output text 2>/dev/null || true)"
 info "tags bucket: turma=$tag_turma grupo=$tag_grupo projeto=$tag_projeto"
 info "schema: colunas=${ncol:-?} location=${location:-?} grain=${grain:-?}"
-if [ "$tag_turma" = "eda262" ] && [ "$tag_grupo" = "$GRUPO" ] && [ "$tag_projeto" = "engenharia-de-dados" ] && [ "${ncol:-0}" -ge 9 ] 2>/dev/null && [ "$location" = "s3://${BUCKET}/trusted/corridas/" ]; then
+if [ "$tag_turma" = "eda262" ] && [ "$tag_grupo" = "$GRUPO" ] && [ "$tag_projeto" = "engenharia-de-dados" ] && [ "${ncol:-0}" -ge 10 ] 2>/dev/null && [ "$location" = "s3://${BUCKET}/trusted/precos/" ]; then
   pass "3" 15 "recursos tagueados e tabela trusted com schema declarado."
 else
-  fail "3" 15 "tags/schema/location nao batem com o contrato da AV1."
+  fail "3" 15 "tags/schema/location nao batem com o contrato do projeto."
 fi
 linha
 
 echo "${B}Criterio 4 — dados, consulta e custo Athena${X}"
-objs="$(aws s3 ls "s3://${BUCKET}/trusted/corridas/" --recursive --region "$REGIAO" 2>/dev/null || true)"
-nobj="$(printf '%s\n' "$objs" | grep -c 'parte-.*\.json' || true)"
+objs="$(aws s3 ls "s3://${BUCKET}/trusted/precos/" --recursive --region "$REGIAO" 2>/dev/null || true)"
+nobj="$(printf '%s\n' "$objs" | grep -c 'precos-.*\.json' || true)"
 bytes_s3="$(printf '%s\n' "$objs" | awk '{s += $3} END {print s + 0}')"
 info "objetos trusted: $nobj · bytes S3: $bytes_s3"
 

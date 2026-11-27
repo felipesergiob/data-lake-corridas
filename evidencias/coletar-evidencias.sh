@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Coleta as evidencias da AV1 e salva em evidencias/.
+# Coleta as evidencias da parte 2 (tema: precos de combustiveis da ANP) e salva em evidencias/.
 #
 # Uso (com a stack no ar e os dados ja enviados ao S3):
 #   ./evidencias/coletar-evidencias.sh               # verifica + consulta Athena
@@ -12,7 +12,8 @@ set -uo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
 EVID="$RAIZ/evidencias"
-TFDIR="$RAIZ/parte-1/terraform"
+TFDIR="$RAIZ/parte-2/terraform"
+SQLFILE="$RAIZ/parte-2/consultas/pergunta-negocio.sql"
 REGIAO="${AWS_REGION:-us-east-1}"
 
 if [ "$REGIAO" != "us-east-1" ]; then
@@ -21,19 +22,19 @@ if [ "$REGIAO" != "us-east-1" ]; then
 fi
 
 if [ "${1:-}" = "--pos-destroy" ]; then
-  "$RAIZ/verificacao/verifica.sh" --pos-destroy | tee "$EVID/verifica-av1-pos-destroy.txt"
+  "$RAIZ/verificacao/verifica.sh" --pos-destroy | tee "$EVID/verifica-parte-2-pos-destroy.txt"
   echo
-  echo "Salvo: evidencias/verifica-av1-pos-destroy.txt"
+  echo "Salvo: evidencias/verifica-parte-2-pos-destroy.txt"
   exit 0
 fi
 
 # 1) verifica.sh
-"$RAIZ/verificacao/verifica.sh" | tee "$EVID/verifica-av1.txt"
+"$RAIZ/verificacao/verifica.sh" | tee "$EVID/verifica-parte-2.txt"
 
 # 2) consulta da pergunta de negocio com custo medido
 WG="$(terraform -chdir="$TFDIR" output -raw workgroup_name)"
 DB="$(terraform -chdir="$TFDIR" output -raw database_name)"
-SQL="$(sed 's/;[[:space:]]*$//' "$RAIZ/parte-1/consultas/pergunta-negocio.sql")"
+SQL="$(grep -v '^[[:space:]]*--' "$SQLFILE" | sed 's/;[[:space:]]*$//')"
 
 QID="$(aws athena start-query-execution --region "$REGIAO" --work-group "$WG" \
   --query-execution-context Database="$DB" --query-string "$SQL" \
@@ -55,7 +56,7 @@ MS="$(aws athena get-query-execution --region "$REGIAO" --query-execution-id "$Q
 CUSTO="$(awk -v b="$BYTES" 'BEGIN { printf "%.8f", b / 1099511627776 * 5 }')"
 
 {
-  echo "AV1 - consulta da pergunta de negocio (Athena)"
+  echo "Parte 2 - consulta da pergunta de negocio (Athena)"
   echo "data ................ $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "workgroup ........... $WG"
   echo "database ............ $DB"
@@ -66,13 +67,13 @@ CUSTO="$(awk -v b="$BYTES" 'BEGIN { printf "%.8f", b / 1099511627776 * 5 }')"
   echo "custo (USD) ......... $CUSTO   # DataScannedInBytes / 1099511627776 * 5"
   echo
   echo "--- SQL ---"
-  cat "$RAIZ/parte-1/consultas/pergunta-negocio.sql"
+  cat "$SQLFILE"
   echo
   echo "--- resultado ---"
   aws athena get-query-results --region "$REGIAO" --query-execution-id "$QID" --output text \
     --query 'ResultSet.Rows[*].Data[*].VarCharValue'
-} | tee "$EVID/consulta-athena-av1.txt"
+} | tee "$EVID/consulta-athena-parte-2.txt"
 
 echo
-echo "Salvos: evidencias/verifica-av1.txt e evidencias/consulta-athena-av1.txt"
-echo "Para o slide de custo, use bytes=$BYTES e QueryExecutionId=$QID no bloco MEDICAO do HTML."
+echo "Salvos: evidencias/verifica-parte-2.txt e evidencias/consulta-athena-parte-2.txt"
+echo "Copie bytes=$BYTES e QueryExecutionId=$QID para o DECISOES.md (decisao 05)."

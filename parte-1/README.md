@@ -1,5 +1,11 @@
 # Parte 1 - AV1
 
+> **Registro da entrega da AV1.** Na unidade 2 o projeto trocou de tema e passou
+> a usar os preços de combustíveis da ANP; o trabalho atual está em `parte-2/`.
+> As decisões desta parte estão em `parte-1/DECISOES.md`. O `verificacao/verifica.sh`
+> e o `evidencias/coletar-evidencias.sh` da raiz agora apontam para a `parte-2/`;
+> as versões da AV1 estão no commit `bb5c188`.
+
 Data Lake da AV1 do grupo 11 para o cenário de corridas urbanas.
 
 ## O que sobe
