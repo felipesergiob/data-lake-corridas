@@ -38,7 +38,7 @@ no `DECISOES.md`.
 
 - Quem roda o apply precisa ser admin do Lake Formation. O apply resolve isso
   sozinho com `modules/admin-lf/admin-lf.sh`: se o usuário ainda não for admin,
-  ele é **acrescentado** à lista, sem tirar ninguém. O `destroy` só o remove se
+  ele é acrescentado à lista, sem tirar ninguém. O `destroy` só o remove se
   foi a stack que o acrescentou. Não há passo manual no console, nem em conta
   limpa.
 - O usuário precisa de permissão IAM para `lakeformation:*`, `iam:*Role*`,

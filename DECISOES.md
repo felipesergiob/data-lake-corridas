@@ -40,8 +40,8 @@ meses seja `sum(soma_valor) / sum(coletas)` e não uma média de médias.
 Em 2025 a refined tem 1.931 linhas contra 555.836 da trusted (288 vezes menos)
 e dá a mesma resposta (Acre R$ 7,671 nas duas).
 
-Raw x trusted no mês do backfill, medido no Athena: **49.974** linhas no raw
-(M5, `3f54fbc4-9c3d-437b-b535-33f04e6a8019`) e **49.958** na trusted (M4,
+Raw x trusted no mês do backfill, medido no Athena: 49.974 linhas no raw
+(M5, `3f54fbc4-9c3d-437b-b535-33f04e6a8019`) e 49.958 na trusted (M4,
 `a1ff6bc7-8a7c-453b-812c-b103e4a7d272`). A diferença são os 16 descartes da
 decisão 02.
 
@@ -56,8 +56,8 @@ cópia) e 4 pares com a mesma chave e preços diferentes (saem as duas linhas,
 porque não dá para saber qual vale). São 16 descartes, 0,032% do mês. Em 2025
 não há duplicata: 555.836 linhas e 555.836 chaves distintas.
 
-Comprovação no Athena (M1, `81e8638e-38bb-40ae-8a7a-a90ee3b06e09`): **605.794
-linhas e 605.794 chaves distintas** na trusted (2025 + backfill), sem duplicata.
+Comprovação no Athena (M1, `81e8638e-38bb-40ae-8a7a-a90ee3b06e09`): 605.794
+linhas e 605.794 chaves distintas na trusted (2025 + backfill), sem duplicata.
 
 ## DECISAO 03 — formato
 
@@ -106,8 +106,8 @@ arquivos saem iguais (MD5 `137198eb…` na trusted e `cf59bc23…` na refined).
 
 O backfill é 2024-06, carregado depois de 2025. Escolhemos esse mês por ser o
 único com duplicatas, o que também testa a decisão 02. O `verifica.sh` recarrega
-o mês e confere o `count(*)`. Medido no Athena: **49.958 linhas antes e 49.958
-depois** da recarga, com 49.958 chaves distintas (`evidencias/verifica-parte-2.txt`,
+o mês e confere o `count(*)`. Medido no Athena: 49.958 linhas antes e 49.958
+depois da recarga, com 49.958 chaves distintas (`evidencias/verifica-parte-2.txt`,
 critério 6).
 
 A poda só acontece com filtro na coluna de partição, por isso a pergunta filtra
@@ -116,8 +116,8 @@ carregadas:
 
 | Consulta na trusted | Filtro | Bytes escaneados |
 | --- | --- | ---: |
-| M2 (`50ac3423-d085-4e40-bdb3-c4c20db67665`) | `ano = '2025'` | **654.971** |
-| M3 (`d6a15796-3475-48c0-a7d4-fb8d56258ba4`) | só `data_coleta` | **699.950** (+6,9%) |
+| M2 (`50ac3423-d085-4e40-bdb3-c4c20db67665`) | `ano = '2025'` | 654.971 |
+| M3 (`d6a15796-3475-48c0-a7d4-fb8d56258ba4`) | só `data_coleta` | 699.950 (+6,9%) |
 
 M3 não consegue podar partição e abre também 2024-06. A diferença é pequena
 porque só há uma partição fora de 2025, e porque o Parquet ainda lê só as
@@ -136,10 +136,10 @@ O Athena cobra no mínimo 10 MB por consulta, então o custo fica em
 `10485760 / 1099511627776 * 5` = US$ 0,0000477, contra US$ 0,00058527 em JSON. O
 workgroup mantém o teto de 256 MiB por consulta contra consultas acidentais.
 
-Medido no Athena (`evidencias/consulta-athena-parte-2.txt`): **meta cumprida**.
+Medido no Athena (`evidencias/consulta-athena-parte-2.txt`), meta cumprida:
 
 - `QueryExecutionId`: `557ec1cd-d8f5-49dc-a8e8-d7c0b4b715df`
-- `DataScannedInBytes`: **30.254** (2,9% da meta de 1.048.576; 4.254 vezes menos
+- `DataScannedInBytes`: 30.254 (2,9% da meta de 1.048.576; 4.254 vezes menos
   que os 128.703.128 da versão em JSON)
 - tempo de execução: 884 ms
 
@@ -168,20 +168,18 @@ lake: o dado só chega pelo Lake Formation.
 
 Quem roda o apply precisa ser admin do Lake Formation. Não usamos
 `aws_lakeformation_data_lake_settings`, porque ele substitui a lista de admins
-da conta inteira (na conta da disciplina, o admin era o `eda-grupo03`). O módulo
-`admin-lf` consulta a lista no `plan`, só acrescenta quem roda o apply se ele
-ainda não for admin, e guarda essa decisão no estado do Terraform. Ele é o
-primeiro a subir e o último a sair: o `destroy` apaga databases e tabelas
-enquanto o operador ainda é admin, e só então o tira da lista, se foi a stack
-que o acrescentou.
+da conta inteira, e a conta da disciplina já tem admins de outros grupos. O
+módulo `admin-lf` só acrescenta quem roda o apply se ele ainda não for admin, e
+guarda isso no estado. Ele sobe primeiro e sai por último: o `destroy` apaga
+databases e tabelas enquanto o operador ainda é admin, e só depois o tira da
+lista, se foi a stack que o acrescentou.
 
-Quem roda o apply não recebe concessão explícita: ele usa as permissões de
-criador que o Lake Formation dá a quem cria o database e as tabelas. Medimos
-por que isso importa. Numa versão anterior, a stack concedia `DESCRIBE` ao
-operador. Isso gerava diferença em todo `plan`, porque se misturava ao `ALL`
-de criador, e no `destroy` a revogação levava junto o `DROP` de criador: os 3
-databases ficaram órfãos (`AccessDeniedException: Required Drop`). Sem a
-concessão, o `plan` após o apply dá "No changes" e o `destroy` fica limpo.
+Quem roda o apply não recebe concessão explícita, só as permissões de criador
+do database e das tabelas. Numa versão anterior a stack concedia `DESCRIBE` ao
+operador: todo `plan` mostrava diferença e, no `destroy`, a revogação levava
+junto o `DROP` de criador, deixando os 3 databases órfãos (`AccessDeniedException:
+Required Drop`). Sem a concessão, o `plan` depois do apply dá "No changes" e o
+`destroy` fica limpo.
 
 Teste no `verifica.sh` (critério 8), medido: o analista lê a refined
 (`SUCCEEDED`) e é barrado na trusted (`FAILED: Insufficient Lake Formation
