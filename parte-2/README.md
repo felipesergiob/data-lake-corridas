@@ -8,6 +8,12 @@ postos com bandeira cobram mais que os de bandeira branca?
 
 ## O que sobe
 
+Módulo `admin-lf` (`terraform/modules/admin-lf/`), o primeiro a subir e o
+último a sair:
+
+- Quem roda o apply é acrescentado aos admins do Lake Formation, se ainda não
+  for, sem tirar ninguém da lista.
+
 Módulo `lake` (`terraform/modules/lake/`):
 
 - Buckets `eda262-g11-lake-raw`, `eda262-g11-lake-trusted`,
@@ -30,17 +36,20 @@ no `DECISOES.md`.
 
 ## Lake Formation
 
-- Quem roda o apply precisa ser admin do Lake Formation na conta (console do
-  Lake Formation, Administrative roles and tasks).
-- `gerenciar_admins_lf` fica `false`: ligado, ele substitui os admins da conta
-  inteira. Só use em conta exclusiva do grupo, listando em `admins_lf_extras`
-  quem deve continuar admin.
-- O apply roda `modules/acesso/revoga-iam-allowed.sh` com bash e AWS CLI. No
-  Windows, use o Git Bash.
+- Quem roda o apply precisa ser admin do Lake Formation. O apply resolve isso
+  sozinho com `modules/admin-lf/admin-lf.sh`: se o usuário ainda não for admin,
+  ele é acrescentado à lista, sem tirar ninguém. O `destroy` só o remove se
+  foi a stack que o acrescentou. Não há passo manual no console, nem em conta
+  limpa.
+- O usuário precisa de permissão IAM para `lakeformation:*`, `iam:*Role*`,
+  `s3`, `glue` e `athena`. Na conta da disciplina, os usuários de grupo têm
+  `AdministratorAccess`.
+- O apply roda `admin-lf.sh` e `revoga-iam-allowed.sh` com bash e AWS CLI. No
+  Windows, rode o Terraform pelo Git Bash.
 
 ## Pré-requisitos
 
-- AWS CLI v2, Terraform >= 1.5, bash.
+- AWS CLI (v2, ou v1 via `pip install awscli`), Terraform >= 1.5, bash.
 - Python >= 3.9 com `pyarrow`: `pip install -r parte-2/dados/requirements.txt`.
 - Credenciais da disciplina no terminal (veja `parte-1/README.md`, seção Credenciais).
 

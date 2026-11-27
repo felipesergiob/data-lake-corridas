@@ -1,0 +1,94 @@
+Parte 2 - medicoes do DECISOES.md · 2026-11-27T02:16:39Z · workgroup eda262-g11-athena-wg
+
+=== M1
+database ............ eda262_g11_trusted
+QueryExecutionId .... 81e8638e-38bb-40ae-8a7a-a90ee3b06e09
+estado .............. SUCCEEDED
+DataScannedInBytes .. 1704031
+tempo (ms) .......... 1093
+custo (USD) ......... 0.00000775   # DataScannedInBytes / 1099511627776 * 5
+--- SQL ---
+SELECT count(*) AS linhas,
+       (SELECT count(*) FROM (SELECT cnpj, produto, data_coleta
+                              FROM precos GROUP BY 1, 2, 3)) AS chaves_distintas
+FROM precos
+--- resultado ---
+linhas	chaves_distintas
+605794	605794
+
+=== M2
+database ............ eda262_g11_trusted
+QueryExecutionId .... 50ac3423-d085-4e40-bdb3-c4c20db67665
+estado .............. SUCCEEDED
+DataScannedInBytes .. 654971
+tempo (ms) .......... 839
+custo (USD) ......... 0.00000298   # DataScannedInBytes / 1099511627776 * 5
+--- SQL ---
+SELECT uf, count(*) AS coletas, round(avg(valor_venda), 3) AS preco_medio
+FROM precos
+WHERE ano = '2025' AND produto = 'GASOLINA'
+GROUP BY uf ORDER BY preco_medio DESC LIMIT 10
+--- resultado ---
+uf	coletas	preco_medio
+AC	700	7.671
+AM	2731	7.226
+RR	798	6.948
+RO	2646	6.915
+SE	1549	6.548
+TO	2116	6.534
+DF	2574	6.443
+PR	13545	6.428
+PA	5669	6.401
+SC	7948	6.393
+
+=== M3
+database ............ eda262_g11_trusted
+QueryExecutionId .... d6a15796-3475-48c0-a7d4-fb8d56258ba4
+estado .............. SUCCEEDED
+DataScannedInBytes .. 699950
+tempo (ms) .......... 1312
+custo (USD) ......... 0.00000318   # DataScannedInBytes / 1099511627776 * 5
+--- SQL ---
+SELECT uf, count(*) AS coletas, round(avg(valor_venda), 3) AS preco_medio
+FROM precos
+WHERE data_coleta BETWEEN DATE '2025-01-01' AND DATE '2025-12-31' AND produto = 'GASOLINA'
+GROUP BY uf ORDER BY preco_medio DESC LIMIT 10
+--- resultado ---
+uf	coletas	preco_medio
+AC	700	7.671
+AM	2731	7.226
+RR	798	6.948
+RO	2646	6.915
+SE	1549	6.548
+TO	2116	6.534
+DF	2574	6.443
+PR	13545	6.428
+PA	5669	6.401
+SC	7948	6.393
+
+=== M4
+database ............ eda262_g11_trusted
+QueryExecutionId .... a1ff6bc7-8a7c-453b-812c-b103e4a7d272
+estado .............. SUCCEEDED
+DataScannedInBytes .. 0
+tempo (ms) .......... 715
+custo (USD) ......... 0.00000000   # DataScannedInBytes / 1099511627776 * 5
+--- SQL ---
+SELECT count(*) AS linhas FROM precos WHERE ano = '2024' AND mes = '06'
+--- resultado ---
+linhas
+49958
+
+=== M5
+database ............ eda262_g11_raw
+QueryExecutionId .... 3f54fbc4-9c3d-437b-b535-33f04e6a8019
+estado .............. SUCCEEDED
+DataScannedInBytes .. 8547371
+tempo (ms) .......... 1071
+custo (USD) ......... 0.00003887   # DataScannedInBytes / 1099511627776 * 5
+--- SQL ---
+SELECT count(*) AS linhas_raw FROM precos_raw WHERE ano = '2024' AND mes = '06'
+--- resultado ---
+linhas_raw
+49974
+

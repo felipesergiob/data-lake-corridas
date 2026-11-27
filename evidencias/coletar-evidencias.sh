@@ -7,6 +7,7 @@ TFDIR="$RAIZ/parte-2/terraform"
 SQLFILE="$RAIZ/parte-2/consultas/pergunta-negocio.sql"
 MEDFILE="$RAIZ/parte-2/consultas/medicoes.sql"
 REGIAO="${AWS_REGION:-us-east-1}"
+aws() { command aws "$@" | tr -d '\r'; }
 
 if [ "$REGIAO" != "us-east-1" ]; then
   echo "Regiao atual: $REGIAO; use us-east-1." >&2

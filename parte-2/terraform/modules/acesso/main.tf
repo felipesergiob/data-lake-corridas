@@ -16,17 +16,10 @@ locals {
     analista   = ["refined"]
   }
 
-  concessoes = merge(
-    { for par in flatten([for papel, camadas in local.acesso : [for c in camadas : { papel = papel, camada = c }]]) :
-      "${par.papel}-${par.camada}" => { principal = aws_iam_role.papel[par.papel].arn, camada = par.camada }
-    },
-    { for c in keys(var.databases) : "operador-${c}" => { principal = local.operador, camada = c } },
-  )
-}
-
-resource "aws_lakeformation_data_lake_settings" "admins" {
-  count  = var.gerenciar_admins_lf ? 1 : 0
-  admins = distinct(concat([local.operador], var.admins_lf_extras))
+  concessoes = {
+    for par in flatten([for papel, camadas in local.acesso : [for c in camadas : { papel = papel, camada = c }]]) :
+    "${par.papel}-${par.camada}" => { principal = aws_iam_role.papel[par.papel].arn, camada = par.camada }
+  }
 }
 
 data "aws_iam_policy_document" "confia_lakeformation" {
@@ -66,7 +59,7 @@ resource "aws_lakeformation_resource" "bucket" {
   arn      = each.value
   role_arn = aws_iam_role.registro.arn
 
-  depends_on = [aws_iam_role_policy.registro, aws_lakeformation_data_lake_settings.admins]
+  depends_on = [aws_iam_role_policy.registro]
 }
 
 resource "aws_lakeformation_permissions" "local_operador" {
@@ -87,7 +80,7 @@ resource "terraform_data" "revoga_iam_allowed" {
     command     = "\"${path.module}/revoga-iam-allowed.sh\" \"${var.regiao}\" ${join(" ", [for c, db in var.databases : "${db}.${var.tabelas[c]}"])}"
   }
 
-  depends_on = [aws_lakeformation_resource.bucket, aws_lakeformation_data_lake_settings.admins]
+  depends_on = [aws_lakeformation_resource.bucket]
 }
 
 data "aws_iam_policy_document" "confia_conta" {
