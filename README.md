@@ -1,16 +1,27 @@
-# Data Lake de corridas em Terraform
+# Data Lake de preços de combustíveis em Terraform
 
-Projeto · Parte 1 (AV1) do grupo 11 da disciplina **Engenharia de Dados** (CESAR School),
-baseado no cenário de corridas urbanas.
+Projeto do grupo 11 da disciplina **Engenharia de Dados** (CESAR School).
+
+**Cenário:** preços de gasolina e etanol nos postos do Brasil, a partir dos dados
+abertos da ANP. **Pergunta de negócio:** em quais estados a gasolina comum é mais
+cara, e os postos com bandeira cobram mais que os de bandeira branca?
+
+Na unidade 2 o projeto trocou de tema: o docente pediu a troca porque o dataset
+de corridas era o mesmo usado nos exercícios em sala. A AV1 continua registrada
+na tag `av1-entrega` e em `parte-1/`.
 
 ## Estrutura
 
-- `parte-1/terraform/` — Terraform modular, backend remoto S3 e workspace `av1`
-- `parte-1/dados/gerar-corridas.py` — gerador dos eventos JSON Lines
-- `parte-1/consultas/pergunta-negocio.sql` — consulta Athena da pergunta de negócio
-- `DECISOES.md` — decisões de engenharia da AV1
-- `verificacao/verifica.sh` — aceite automático da AV1
+- `parte-2/` — AV2 (tema ANP); deploy, carga e destroy em `parte-2/README.md`
+  - `terraform/` — módulos `lake` (3 camadas S3, Glue e Athena) e `acesso`
+    (Lake Formation), backend remoto S3 e workspace `av2`
+  - `dados/carregar.sh`, `dados/ingerir-anp.py` e `dados/fontes-anp.csv` —
+    ingestão idempotente dos CSVs mensais da ANP para raw, trusted e refined
+  - `consultas/pergunta-negocio.sql` e `consultas/medicoes.sql` — consultas Athena
+- `DECISOES.md` — decisões de engenharia do tema atual
+- `verificacao/verifica.sh` — aceite automático, apontando para `parte-2/`
 - `evidencias/` — saídas da verificação e da consulta Athena
-- `apresentacao-parte-1-g11.html` e `apresentacao-parte-1-g11.pdf` — apresentação da AV1
+- `parte-1/` — AV1 entregue (tema de corridas), com o próprio `DECISOES.md`,
+  e a apresentação `apresentacao-parte-1-g11.pdf` na raiz
 
 Região obrigatória: `us-east-1` (N. Virginia).

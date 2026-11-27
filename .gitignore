@@ -16,7 +16,11 @@ credentials*
 
 # Generated data
 parte-1/dados/saida/
+parte-2/dados/saida/
 
 # Python
 __pycache__/
 *.pyc
+
+
+CS_2026_2_-_Guia_do_Projeto_-_ENGENHARIA_DE_DADOS.pdf
