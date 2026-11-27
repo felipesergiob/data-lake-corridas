@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# Coleta as evidencias da Parte 2 (tema: precos de combustiveis da ANP) em evidencias/.
-#
-# Uso (com a stack no ar e os dados carregados com parte-2/dados/carregar.sh):
-#   ./evidencias/coletar-evidencias.sh               # verifica + pergunta + medicoes
-#
-# Depois do terraform destroy:
-#   ./evidencias/coletar-evidencias.sh --pos-destroy # verifica --pos-destroy
-#
-# Requer: aws CLI, terraform, credenciais da disciplina, regiao us-east-1.
 set -uo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
@@ -32,7 +23,6 @@ fi
 WG="$(terraform -chdir="$TFDIR" output -raw workgroup_name)"
 database_da_camada() { terraform -chdir="$TFDIR" output -raw "database_$1"; }
 
-# executa ROTULO DATABASE SQL -> imprime um bloco com id, bytes, custo e resultado
 executa() {
   local rotulo="$1" db="$2" sql="$3" qid estado bytes ms custo
   qid="$(aws athena start-query-execution --region "$REGIAO" --work-group "$WG" \
@@ -71,10 +61,8 @@ executa() {
   echo
 }
 
-# 1) verifica.sh
 "$RAIZ/verificacao/verifica.sh" | tee "$EVID/verifica-parte-2.txt"
 
-# 2) pergunta de negocio na refined
 SQL="$(grep -v '^[[:space:]]*--' "$SQLFILE" | sed 's/;[[:space:]]*$//')"
 {
   echo "Parte 2 - pergunta de negocio (Athena) · $(date -u +%Y-%m-%dT%H:%M:%SZ) · workgroup $WG"
@@ -82,16 +70,14 @@ SQL="$(grep -v '^[[:space:]]*--' "$SQLFILE" | sed 's/;[[:space:]]*$//')"
   executa "pergunta de negocio" "$(database_da_camada refined)" "$SQL"
 } | tee "$EVID/consulta-athena-parte-2.txt"
 
-# 3) medicoes do DECISOES.md: cada bloco de medicoes.sql comeca com
-#    "-- Mn (...) ... Database: eda262_gNN_<camada>"
 {
   echo "Parte 2 - medicoes do DECISOES.md · $(date -u +%Y-%m-%dT%H:%M:%SZ) · workgroup $WG"
   echo
   bloco=""; rotulo=""; camada=""
   while IFS= read -r l || [ -n "$l" ]; do
-    if [[ "$l" =~ ^--\ (M[0-9]+.*)$ ]]; then
+    if [[ "$l" =~ ^--\ (M[0-9]+)\ ([a-z]+)[[:space:]]*$ ]]; then
       rotulo="${BASH_REMATCH[1]}"
-      camada="$(printf '%s' "$l" | sed -nE 's/.*Database: eda262_g[^_]+_([a-z]+).*/\1/p')"
+      camada="${BASH_REMATCH[2]}"
       bloco=""
     elif [[ "$l" =~ ^[[:space:]]*-- ]] || [ -z "${l// }" ]; then
       :

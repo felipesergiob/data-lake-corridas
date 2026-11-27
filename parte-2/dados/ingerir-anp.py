@@ -1,24 +1,7 @@
 #!/usr/bin/env python3
-"""Ingere a serie historica de precos de combustiveis da ANP (gasolina e etanol).
+"""Ingere os precos de gasolina e etanol da ANP nas camadas raw, trusted e refined.
 
-Para cada mes AAAA-MM do intervalo pedido, monta as tres camadas localmente,
-ja no layout de particao que vai para o S3:
-
-  raw      saida/raw/anp/ano=AAAA/mes=MM/precos.csv
-           CSV original da ANP, byte a byte (baixa uma vez e reaproveita)
-  trusted  saida/trusted/precos/ano=AAAA/mes=MM/part-0.parquet
-           uma linha por coleta (posto x produto x dia), limpa e sem duplicata
-  refined  saida/refined/precos_uf_mes/ano=AAAA/mes=MM/part-0.parquet
-           agregado por UF x produto x tipo de bandeira no mes
-
-Cada particao tem nome de arquivo fixo e e apagada antes de ser regravada:
-rodar o mesmo mes de novo gera os mesmos arquivos, sem duplicar.
-O carregar.sh faz o mesmo no S3 (apaga o prefixo da particao e copia).
-
-A lista de URLs fica em fontes-anp.csv porque a ANP nao segue um padrao de
-nome entre anos (em 2026 ha nomes sem .csv e ate "cados-abertos").
-
-Requer: Python >= 3.9 e pyarrow (pip install -r requirements.txt).
+Cada mes vira uma particao ano=AAAA/mes=MM com nome de arquivo fixo.
 """
 
 from __future__ import annotations
@@ -48,7 +31,6 @@ PRECO_MIN = 1.00
 PRECO_MAX = 15.00
 CORROMPIDO = "�"
 
-# Schemas Parquet. As colunas de particao (ano, mes) ficam so no caminho.
 SCHEMA_TRUSTED = pa.schema([
     ("cnpj", pa.string()),
     ("produto", pa.string()),
@@ -103,7 +85,6 @@ def baixa(url: str, destino: Path) -> None:
 
 
 def preco(texto: str) -> float | None:
-    """'6,29' -> 6.29. Aceita '5,9' e '6'. Devolve None se nao for numero."""
     try:
         return float(texto.strip().replace(",", "."))
     except ValueError:
@@ -111,7 +92,6 @@ def preco(texto: str) -> float | None:
 
 
 def data_coleta(texto: str) -> dt.date | None:
-    """'31/01/2025' -> date(2025, 1, 31)."""
     try:
         return dt.datetime.strptime(texto.strip(), "%d/%m/%Y").date()
     except ValueError:
@@ -119,7 +99,6 @@ def data_coleta(texto: str) -> dt.date | None:
 
 
 def limpa(bruto: Path, mes: str) -> tuple[list[dict], Counter]:
-    """Le o CSV raw do mes e devolve as linhas trusted (ordenadas) e as contagens."""
     c: Counter = Counter()
     por_chave: dict[tuple, dict] = {}
     conflito: set[tuple] = set()
@@ -182,8 +161,6 @@ def limpa(bruto: Path, mes: str) -> tuple[list[dict], Counter]:
             elif anterior == evento:
                 c["descarte_duplicata_identica"] += 1
             else:
-                # Mesmo posto, produto e dia com precos diferentes: nao ha como
-                # saber qual vale, entao as duas versoes saem da trusted.
                 conflito.add(chave)
                 del por_chave[chave]
                 c["descarte_conflito"] += 2
@@ -195,11 +172,6 @@ def limpa(bruto: Path, mes: str) -> tuple[list[dict], Counter]:
 
 
 def agrega(linhas: list[dict]) -> list[dict]:
-    """Refined: UF x produto x tipo de bandeira (BRANCA ou BANDEIRA) no mes.
-
-    Guarda soma e contagem (nao a media) para que a media de varios meses
-    seja exata: sum(soma_valor) / sum(coletas).
-    """
     grupos: dict[tuple, dict] = {}
     for e in linhas:
         tipo = "BRANCA" if e["bandeira"] == "BRANCA" else "BANDEIRA"
@@ -218,7 +190,6 @@ def agrega(linhas: list[dict]) -> list[dict]:
 
 
 def grava_parquet(linhas: list[dict], schema: pa.Schema, pasta: Path) -> int:
-    """Apaga a particao e grava part-0.parquet. Devolve o tamanho em bytes."""
     if pasta.exists():
         shutil.rmtree(pasta)
     pasta.mkdir(parents=True)
@@ -243,7 +214,6 @@ def processa_mes(mes: str, url: str, saida: Path, rebaixar: bool) -> Counter:
                                        saida / "refined" / "precos_uf_mes" / part)
     c["linhas_refined"] = len(refined)
 
-    # Contagens do mes ficam fora das camadas (nao sobem para o S3).
     contagens = saida / "contagens" / f"{mes}.json"
     contagens.parent.mkdir(parents=True, exist_ok=True)
     contagens.write_text(json.dumps(dict(sorted(c.items())), indent=2) + "\n", encoding="utf-8")

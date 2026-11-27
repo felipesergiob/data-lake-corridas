@@ -1,10 +1,4 @@
 #!/usr/bin/env bash
-# Revoga a permissao padrao IAM_ALLOWED_PRINCIPALS de databases e tabelas.
-#
-# Uso: revoga-iam-allowed.sh <regiao> <database.tabela> [<database.tabela> ...]
-#
-# Idempotente: se a permissao ja nao existir, o Lake Formation responde com
-# erro de "nao encontrado" e o script segue. Qualquer outro erro falha o apply.
 set -uo pipefail
 
 regiao="$1"; shift

@@ -1,10 +1,4 @@
-# Tres tabelas, todas com schema declarado aqui (sem Crawler) e particionadas
-# por ano/mes com partition projection: o Athena calcula as particoes a partir
-# dos parametros da tabela, entao nao ha MSCK REPAIR nem aws_glue_partition, e
-# carregar a mesma particao de novo nao muda o catalogo.
-
 locals {
-  # Parametros comuns de projection. "$${...}" vira "${...}" literal no Glue.
   projecao = {
     "projection.enabled"    = "true"
     "projection.ano.type"   = "integer"
@@ -47,8 +41,6 @@ locals {
     { nome = "preco_max", tipo = "double", comentario = "maior preco coletado no mes" },
   ]
 }
-
-# --- raw: CSV original da ANP, tudo string ---------------------------------
 
 resource "aws_glue_catalog_table" "raw" {
   name          = "precos_raw"
@@ -96,8 +88,6 @@ resource "aws_glue_catalog_table" "raw" {
   }
 }
 
-# --- trusted: uma linha por coleta, limpa, Parquet -------------------------
-
 resource "aws_glue_catalog_table" "trusted" {
   name          = "precos"
   database_name = aws_glue_catalog_database.camada["trusted"].name
@@ -140,8 +130,6 @@ resource "aws_glue_catalog_table" "trusted" {
     }
   }
 }
-
-# --- refined: agregado UF x produto x tipo de bandeira x mes, Parquet ------
 
 resource "aws_glue_catalog_table" "refined" {
   name          = "precos_uf_mes"

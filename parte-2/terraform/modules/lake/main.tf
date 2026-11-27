@@ -3,10 +3,6 @@ locals {
   camadas = toset(["raw", "trusted", "refined"])
 }
 
-# ---------------------------------------------------------------------------
-# Buckets: um por camada (eda262-gNN-lake-<camada>) + resultados do Athena
-# ---------------------------------------------------------------------------
-
 resource "aws_s3_bucket" "lake" {
   for_each      = local.camadas
   bucket        = "${local.prefixo}-lake-${each.key}"
@@ -56,19 +52,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "athena_results" {
   }
 }
 
-# ---------------------------------------------------------------------------
-# Catalogo: um database por camada, para o Lake Formation conceder por camada
-# ---------------------------------------------------------------------------
-
 resource "aws_glue_catalog_database" "camada" {
   for_each    = local.camadas
   name        = "eda262_${var.grupo}_${each.key}"
   description = "Camada ${each.key} do grupo ${var.grupo}: precos de combustiveis da ANP."
 }
-
-# ---------------------------------------------------------------------------
-# Athena
-# ---------------------------------------------------------------------------
 
 resource "aws_athena_workgroup" "wg" {
   name          = "${local.prefixo}-athena-wg"

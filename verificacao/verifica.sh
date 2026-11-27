@@ -1,11 +1,4 @@
 #!/usr/bin/env bash
-# Verificacao automatica da Parte 2 (AV2). Imprime PASSA/FALHA por criterio.
-#
-#   ./verificacao/verifica.sh                 # stack no ar, dados carregados
-#   ./verificacao/verifica.sh --sem-recarga   # pula o teste que recarrega 2024-06
-#   ./verificacao/verifica.sh --pos-destroy   # depois do terraform destroy
-#
-# A AV1 (tema corridas) se verifica com o script da tag av1-entrega.
 set -uo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/.." && pwd)"
@@ -58,11 +51,9 @@ if [ "$POS" != "1" ] && ! command -v terraform >/dev/null 2>&1; then
 fi
 
 consulta_negocio() {
-  # consulta versionada em parte-2/consultas, sem comentarios e sem o ';' final
   grep -v '^[[:space:]]*--' "$SQLFILE" | sed 's/;[[:space:]]*$//'
 }
 
-# roda_query SQL DATABASE WORKGROUP -> "qid|estado|bytes|motivo"
 roda_query() {
   local sql="$1" db="$2" wg="$3" qid estado bytes motivo
   qid="$(aws athena start-query-execution --region "$REGIAO" --work-group "$wg" \
@@ -83,7 +74,6 @@ roda_query() {
   echo "${qid}|${estado:-UNKNOWN}|${bytes:-0}|${motivo:-}"
 }
 
-# valor_escalar SQL DATABASE WORKGROUP -> primeira celula do resultado (ou vazio)
 valor_escalar() {
   local r qid estado
   r="$(roda_query "$1" "$2" "$3")"
@@ -93,7 +83,6 @@ valor_escalar() {
     --query "ResultSet.Rows[1].Data[0].VarCharValue" --output text 2>/dev/null || true
 }
 
-# principais_select DATABASE -> principals com SELECT em todas as tabelas do database
 principais_select() {
   aws lakeformation list-permissions --region "$REGIAO" \
     --resource "{\"Table\":{\"DatabaseName\":\"$1\",\"TableWildcard\":{}}}" \
@@ -101,9 +90,6 @@ principais_select() {
     --output text 2>/dev/null | tr '\t' '\n' || true
 }
 
-# ===========================================================================
-# --pos-destroy
-# ===========================================================================
 if [ "$POS" = "1" ]; then
   echo "${B}Parte 2 — destroy limpo (regiao $REGIAO)${X}"; linha
   sobras=0
@@ -140,7 +126,6 @@ fi
 
 echo "${B}Parte 2 — verificacao do projeto (regiao $REGIAO)${X}"; linha
 
-# ===========================================================================
 echo "${B}Criterio 0 — estrutura local da entrega${X}"
 for f in main.tf modules/lake/tabelas.tf modules/acesso/main.tf; do
   [ -f "$TFDIR/$f" ] || { fail "0" 0 "nao achei parte-2/terraform/$f."; exit 2; }
@@ -153,7 +138,6 @@ fi
 pass "0" 0 "Terraform em modulos (lake + acesso), backend s3, schema declarado, consulta versionada."
 linha
 
-# ===========================================================================
 echo "${B}Criterio 1 — workspace e backend remoto${X}"
 ws="$(terraform -chdir="$TFDIR" workspace show 2>/dev/null || true)"
 if [ "$ws" = "av2" ]; then
@@ -166,7 +150,6 @@ if [ -f "$TFDIR/terraform.tfstate" ] && grep -q '"resources"' "$TFDIR/terraform.
 fi
 linha
 
-# ===========================================================================
 echo "${B}Criterio 2 — outputs e nomes padronizados${X}"
 B_RAW="$(tfout lake_raw_bucket)"; B_TRU="$(tfout lake_trusted_bucket)"; B_REF="$(tfout lake_refined_bucket)"
 RESULTS="$(tfout athena_results_bucket_name)"; WG="$(tfout workgroup_name)"
@@ -194,7 +177,6 @@ else
 fi
 linha
 
-# ===========================================================================
 echo "${B}Criterio 3 — tags, formato e particionamento das tabelas${X}"
 ok3=1
 for b in "$B_RAW" "$B_TRU" "$B_REF" "$RESULTS"; do
@@ -221,7 +203,6 @@ else
 fi
 linha
 
-# ===========================================================================
 echo "${B}Criterio 4 — dados nas tres camadas${X}"
 ok4=1
 for par in "$B_RAW/anp:precos\.csv" "$B_TRU/precos:part-0\.parquet" "$B_REF/precos_uf_mes:part-0\.parquet"; do
@@ -240,7 +221,6 @@ else
 fi
 linha
 
-# ===========================================================================
 echo "${B}Criterio 5 — pergunta de negocio, custo e meta${X}"
 R5="$(roda_query "$(consulta_negocio)" "$DB_REF" "$WG")"
 qid="$(echo "$R5" | cut -d'|' -f1)"; estado="$(echo "$R5" | cut -d'|' -f2)"
@@ -261,7 +241,6 @@ else
 fi
 linha
 
-# ===========================================================================
 echo "${B}Criterio 6 — backfill e ingestao idempotente${X}"
 SQL_BF="SELECT count(*) FROM $T_TRU WHERE ano = '$BACKFILL_ANO' AND mes = '$BACKFILL_MES'"
 SQL_CH="SELECT count(*) FROM (SELECT cnpj, produto, data_coleta FROM $T_TRU WHERE ano = '$BACKFILL_ANO' AND mes = '$BACKFILL_MES' GROUP BY 1, 2, 3)"
@@ -287,7 +266,6 @@ else
 fi
 linha
 
-# ===========================================================================
 echo "${B}Criterio 7 — Lake Formation: registro e permissao por camada${X}"
 ok7=1
 registrados="$(aws lakeformation list-resources --region "$REGIAO" --query "ResourceInfoList[].ResourceArn" --output text 2>/dev/null | tr '\t' '\n' || true)"
@@ -320,7 +298,6 @@ else
 fi
 linha
 
-# ===========================================================================
 echo "${B}Criterio 8 — prova pratica: papel analista${X}"
 cred="$(aws sts assume-role --role-arn "$P_ANA" --role-session-name verifica-analista \
   --query "Credentials.[AccessKeyId,SecretAccessKey,SessionToken]" --output text 2>/dev/null || true)"
@@ -329,7 +306,6 @@ if [ -z "$cred" ]; then
 else
   read -r ak sk st <<< "$cred"
   como_analista() {
-    # subshell sem perfil: com AWS_PROFILE definido a CLI ignoraria as chaves do papel
     ( unset AWS_PROFILE AWS_DEFAULT_PROFILE
       export AWS_ACCESS_KEY_ID="$ak" AWS_SECRET_ACCESS_KEY="$sk" AWS_SESSION_TOKEN="$st"
       roda_query "$@" )
@@ -347,7 +323,6 @@ else
 fi
 linha
 
-# ===========================================================================
 echo "${B}Criterio 9 — DECISOES.md${X}"
 if [ -f "$DECISOES" ]; then
   nd="$(grep -ciE '^## DECIS[ÃA]O\s*0?[1-5]' "$DECISOES" 2>/dev/null || true)"

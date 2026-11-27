@@ -20,6 +20,5 @@ module "acesso" {
   gerenciar_admins_lf       = var.gerenciar_admins_lf
   admins_lf_extras          = var.admins_lf_extras
 
-  # Lake Formation so depois que buckets e tabelas existem.
   depends_on = [module.lake]
 }

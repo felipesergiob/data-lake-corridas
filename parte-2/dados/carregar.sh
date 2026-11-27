@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-# Ingere meses da ANP e carrega as tres camadas no S3, de forma idempotente.
-#
-# Uso:
-#   ./parte-2/dados/carregar.sh 2025-01 2025-12   # carga base
-#   ./parte-2/dados/carregar.sh 2024-06           # backfill de uma particao
-#
-# Para cada mes e cada camada: apaga o prefixo ano=AAAA/mes=MM/ e copia a
-# particao local. Rodar de novo o mesmo mes deixa exatamente os mesmos objetos
-# (mesmo nome, mesmo conteudo): nao sobra arquivo antigo nem duplica linha.
-# Requer: aws CLI, terraform (para ler os nomes dos buckets), python3 + pyarrow.
 set -euo pipefail
 
 RAIZ="$(cd "$(dirname "$0")/../.." && pwd)"

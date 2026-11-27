@@ -1,22 +1,7 @@
-# Controle de acesso por camada com Lake Formation.
-#
-#   papel          raw   trusted   refined
-#   engenharia     sim   sim       nao
-#   analista       nao   nao       sim
-#   operador*      sim   sim       sim     (* quem roda o terraform apply/verifica)
-#
-# Os buckets sao registrados no Lake Formation com um papel proprio da stack
-# (nao o service-linked role da conta), para o destroy nao deixar nada para tras.
-# Depois de criadas as tabelas, a permissao padrao IAM_ALLOWED_PRINCIPALS e
-# revogada: sem isso, qualquer usuario com IAM para Glue/S3 leria tudo e as
-# permissoes do Lake Formation nao teriam efeito.
-
 data "aws_caller_identity" "atual" {}
 
 data "aws_partition" "atual" {}
 
-# Converte um assumed-role (arn:aws:sts::...:assumed-role/X/sessao) no ARN do
-# papel IAM (arn:aws:iam::...:role/X), que e o que o Lake Formation aceita.
 data "aws_iam_session_context" "atual" {
   arn = data.aws_caller_identity.atual.arn
 }
@@ -31,8 +16,6 @@ locals {
     analista   = ["refined"]
   }
 
-  # Pares (principal, camada) que recebem DESCRIBE no database e
-  # SELECT + DESCRIBE em todas as tabelas da camada.
   concessoes = merge(
     { for par in flatten([for papel, camadas in local.acesso : [for c in camadas : { papel = papel, camada = c }]]) :
       "${par.papel}-${par.camada}" => { principal = aws_iam_role.papel[par.papel].arn, camada = par.camada }
@@ -41,23 +24,10 @@ locals {
   )
 }
 
-# ---------------------------------------------------------------------------
-# Administradores do Lake Formation (opcional, desligado por padrao)
-# ---------------------------------------------------------------------------
-# CUIDADO: aws_lakeformation_data_lake_settings SUBSTITUI a lista de admins da
-# conta inteira, e o destroy dele zera a lista. Numa conta compartilhada isso
-# tira o acesso de outros grupos e do docente. So ligue (gerenciar_admins_lf =
-# true) numa conta exclusiva do grupo. Com o padrao (false), quem roda o apply
-# ja precisa ser admin do Lake Formation.
-
 resource "aws_lakeformation_data_lake_settings" "admins" {
   count  = var.gerenciar_admins_lf ? 1 : 0
   admins = distinct(concat([local.operador], var.admins_lf_extras))
 }
-
-# ---------------------------------------------------------------------------
-# Papel usado pelo Lake Formation para ler/escrever nos buckets registrados
-# ---------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "confia_lakeformation" {
   statement {
@@ -99,8 +69,6 @@ resource "aws_lakeformation_resource" "bucket" {
   depends_on = [aws_iam_role_policy.registro, aws_lakeformation_data_lake_settings.admins]
 }
 
-# O operador precisa de DATA_LOCATION_ACCESS para alterar tabelas que apontam
-# para locais registrados (por exemplo, num apply futuro que mude o schema).
 resource "aws_lakeformation_permissions" "local_operador" {
   for_each    = var.bucket_arns
   principal   = local.operador
@@ -110,12 +78,6 @@ resource "aws_lakeformation_permissions" "local_operador" {
     arn = aws_lakeformation_resource.bucket[each.key].arn
   }
 }
-
-# ---------------------------------------------------------------------------
-# Revoga IAM_ALLOWED_PRINCIPALS dos databases e tabelas da stack
-# ---------------------------------------------------------------------------
-# Nao ha recurso Terraform que revogue uma permissao que ele nao criou, entao
-# isto roda a AWS CLI. Reexecuta se algum database ou tabela for recriado.
 
 resource "terraform_data" "revoga_iam_allowed" {
   triggers_replace = [var.databases, var.tabelas, var.tabela_ids]
@@ -127,10 +89,6 @@ resource "terraform_data" "revoga_iam_allowed" {
 
   depends_on = [aws_lakeformation_resource.bucket, aws_lakeformation_data_lake_settings.admins]
 }
-
-# ---------------------------------------------------------------------------
-# Papeis por camada e concessoes
-# ---------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "confia_conta" {
   statement {
@@ -149,9 +107,6 @@ resource "aws_iam_role" "papel" {
   assume_role_policy = data.aws_iam_policy_document.confia_conta.json
 }
 
-# IAM so libera o caminho (Athena, Glue, resultados). Quem decide que dado o
-# papel enxerga e o Lake Formation: o acesso aos buckets do lake vem do
-# lakeformation:GetDataAccess, nunca de s3:GetObject direto.
 data "aws_iam_policy_document" "consulta" {
   statement {
     actions = [

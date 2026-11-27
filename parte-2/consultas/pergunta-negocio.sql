@@ -1,7 +1,3 @@
--- Em quais estados a gasolina comum e mais cara,
--- e os postos com bandeira cobram mais que os de bandeira branca?
--- Roda na refined (database eda262_gNN_refined). O filtro em ano (coluna de
--- particao) faz o Athena ler so as particoes de 2025.
 SELECT
   uf,
   sum(coletas) AS coletas,
