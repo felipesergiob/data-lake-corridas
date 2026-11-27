@@ -63,6 +63,18 @@ O estado usa o mesmo bucket `eda262-g11-tfstate` da Parte 1, com a chave
 `destroy` dela antes, porque o bucket `eda262-g11-lake-trusted` e o workgroup
 têm o mesmo nome.
 
+O bucket de estado e a tabela de lock não fazem parte da stack. Numa conta
+limpa, crie os dois antes do `init` (pule o que já existir):
+
+```bash
+aws s3api create-bucket --bucket eda262-g11-tfstate --region us-east-1
+aws s3api put-bucket-versioning --bucket eda262-g11-tfstate --versioning-configuration Status=Enabled
+aws s3api put-public-access-block --bucket eda262-g11-tfstate --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
+aws dynamodb create-table --table-name eda-tflock --region us-east-1 \
+  --attribute-definitions AttributeName=LockID,AttributeType=S \
+  --key-schema AttributeName=LockID,KeyType=HASH --billing-mode PAY_PER_REQUEST
+```
+
 ## Deploy
 
 ```bash
