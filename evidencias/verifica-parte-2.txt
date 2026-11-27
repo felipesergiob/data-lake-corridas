@@ -1,0 +1,102 @@
+[1mParte 2 — verificacao do projeto (regiao us-east-1)[0m
+----------------------------------------------------------------
+[1mCriterio 0 — estrutura local da entrega[0m
+[32mPASSA[0m  [0]  (0%)  Terraform em modulos (lake + acesso), backend s3, schema declarado, consulta versionada.
+----------------------------------------------------------------
+[1mCriterio 1 — workspace e backend remoto[0m
+[32mPASSA[0m  [1]  (10%)  workspace av2 ativo.
+----------------------------------------------------------------
+[1mCriterio 2 — outputs e nomes padronizados[0m
+[2m       buckets: eda262-g11-lake-raw eda262-g11-lake-trusted eda262-g11-lake-refined eda262-g11-athena-results · wg: eda262-g11-athena-wg[0m
+[2m       tabelas: eda262_g11_raw.precos_raw eda262_g11_trusted.precos eda262_g11_refined.precos_uf_mes[0m
+[32mPASSA[0m  [2]  (10%)  outputs existem e seguem eda262-gNN-lake-<camada>.
+----------------------------------------------------------------
+[1mCriterio 3 — tags, formato e particionamento das tabelas[0m
+[2m       eda262-g11-lake-raw: grupo=g11 projeto=engenharia-de-dados turma=eda262 [0m
+[2m       eda262-g11-lake-trusted: grupo=g11 projeto=engenharia-de-dados turma=eda262 [0m
+[2m       eda262-g11-lake-refined: grupo=g11 projeto=engenharia-de-dados turma=eda262 [0m
+[2m       eda262-g11-athena-results: grupo=g11 projeto=engenharia-de-dados turma=eda262 [0m
+[2m       eda262_g11_raw.precos_raw: org.apache.hadoop.hive.serde2.OpenCSVSerde	ano,mes	true[0m
+[2m       eda262_g11_trusted.precos: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe	ano,mes	true[0m
+[2m       eda262_g11_refined.precos_uf_mes: org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe	ano,mes	true[0m
+[32mPASSA[0m  [3]  (10%)  4 buckets com as 3 tags; raw em CSV, trusted e refined em Parquet, todas particionadas por ano/mes (projection).
+----------------------------------------------------------------
+[1mCriterio 4 — dados nas tres camadas[0m
+[2m       s3://eda262-g11-lake-raw/anp/: 13 particoes, 103716073 bytes, 0 objetos fora do padrao[0m
+[2m       s3://eda262-g11-lake-trusted/precos/: 13 particoes, 6495484 bytes, 0 objetos fora do padrao[0m
+[2m       s3://eda262-g11-lake-refined/precos_uf_mes/: 13 particoes, 69343 bytes, 0 objetos fora do padrao[0m
+[32mPASSA[0m  [4]  (10%)  um arquivo por particao ano=AAAA/mes=MM em cada camada.
+----------------------------------------------------------------
+[1mCriterio 5 — pergunta de negocio, custo e meta[0m
+[2m       query_id=86be6338-1ba1-49c4-a3c1-744e0ce5ef2f estado=SUCCEEDED bytes=30254 meta=1048576[0m
+[2m       custo_estimado_usd=0.00000014 (o Athena cobra no minimo 10 MB por consulta)[0m
+------------------------
+|    GetQueryResults   |
++----------------------+
+|  uf                  |
+|  coletas             |
+|  preco_medio         |
+|  preco_branca        |
+|  preco_bandeira      |
+|  diferenca_bandeira  |
+|  AC                  |
+|  700                 |
+|  7.671               |
+|  7.738               |
+|  7.664               |
+|  -0.074              |
+|  AM                  |
+|  2731                |
+|  7.226               |
+|  7.754               |
+|  7.149               |
+|  -0.605              |
+|  RR                  |
+|  798                 |
+|  6.948               |
+|  6.942               |
+|  6.951               |
+|  0.009               |
+|  RO                  |
+|  2646                |
+|  6.915               |
+|  6.919               |
+|  6.914               |
+|  -0.005              |
+|  SE                  |
+|  1549                |
+|  6.548               |
+|  6.482               |
+|  6.58                |
+|  0.098               |
++----------------------+
+[32mPASSA[0m  [5]  (20%)  pergunta respondida na refined; 30254 bytes <= meta de 1048576 bytes.
+----------------------------------------------------------------
+[1mCriterio 6 — backfill e ingestao idempotente[0m
+[2m       backfill 2024-06 na trusted: 49958 linhas (esperado 49958)[0m
+[2m       recarregando 2024-06 com carregar.sh (apaga a particao e copia de novo)...[0m
+[2m       depois da recarga: 49958 linhas · chaves distintas: 49958[0m
+[32mPASSA[0m  [6]  (15%)  particao de backfill presente; recarregar nao mudou o count(*) e nao ha chave duplicada.
+----------------------------------------------------------------
+[1mCriterio 7 — Lake Formation: registro e permissao por camada[0m
+[2m       registrado: eda262-g11-lake-raw[0m
+[2m       registrado: eda262-g11-lake-trusted[0m
+[2m       registrado: eda262-g11-lake-refined[0m
+[2m       eda262_g11_raw.precos_raw: IAM_ALLOWED_PRINCIPALS=0[0m
+[2m       eda262_g11_trusted.precos: IAM_ALLOWED_PRINCIPALS=0[0m
+[2m       eda262_g11_refined.precos_uf_mes: IAM_ALLOWED_PRINCIPALS=0[0m
+[2m       raw: engenharia=1 analista=0[0m
+[2m       trusted: engenharia=1 analista=0[0m
+[2m       refined: engenharia=0 analista=1[0m
+[32mPASSA[0m  [7]  (15%)  3 buckets registrados, sem IAM_ALLOWED_PRINCIPALS; engenharia em raw+trusted, analista so em refined.
+----------------------------------------------------------------
+[1mCriterio 8 — prova pratica: papel analista[0m
+[2m       analista na refined: SUCCEEDED[0m
+[2m       analista na trusted: FAILED Insufficient permissions to execute the query. Insufficient Lake Formation permission(s): Required Describe on eda262_g1[0m
+[32mPASSA[0m  [8]  (10%)  analista le a refined e e barrado na trusted.
+----------------------------------------------------------------
+[1mCriterio 9 — DECISOES.md[0m
+[32mPASSA[0m  [9]  (0%)  5 decisoes, nenhuma PENDENTE; conteudo e nota sao avaliados manualmente.
+----------------------------------------------------------------
+[1mResumo automatico: 100/100 pontos-percentuais[0m
+[2m       depois do terraform destroy, rode ./verificacao/verifica.sh --pos-destroy.[0m

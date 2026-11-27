@@ -1,0 +1,5 @@
+[1mParte 2 — destroy limpo (regiao us-east-1)[0m
+----------------------------------------------------------------
+[32mPASSA[0m  [9]  (100%)  nenhum bucket, database, workgroup, papel IAM ou registro do Lake Formation orfao.
+----------------------------------------------------------------
+[1mResultado pos-destroy: 100/100[0m

@@ -7,6 +7,7 @@ SQLFILE="${SQLFILE:-$RAIZ/parte-2/consultas/pergunta-negocio.sql}"
 CARREGAR="$RAIZ/parte-2/dados/carregar.sh"
 DECISOES="${DECISOES:-$RAIZ/DECISOES.md}"
 REGIAO="${AWS_REGION:-us-east-1}"
+aws() { command aws "$@" | tr -d '\r'; }
 BACKFILL_ANO="2024"; BACKFILL_MES="06"; BACKFILL_LINHAS=49958
 
 POS=0; RECARGA=1

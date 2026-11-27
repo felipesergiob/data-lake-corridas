@@ -1,0 +1,41 @@
+Parte 2 - pergunta de negocio (Athena) · 2026-11-27T02:16:22Z · workgroup eda262-g11-athena-wg
+
+=== pergunta de negocio
+database ............ eda262_g11_refined
+QueryExecutionId .... 557ec1cd-d8f5-49dc-a8e8-d7c0b4b715df
+estado .............. SUCCEEDED
+DataScannedInBytes .. 30254
+tempo (ms) .......... 884
+custo (USD) ......... 0.00000014   # DataScannedInBytes / 1099511627776 * 5
+--- SQL ---
+SELECT
+  uf,
+  sum(coletas) AS coletas,
+  round(sum(soma_valor) / sum(coletas), 3) AS preco_medio,
+  round(sum(CASE WHEN tipo_bandeira = 'BRANCA' THEN soma_valor END)
+      / sum(CASE WHEN tipo_bandeira = 'BRANCA' THEN coletas END), 3) AS preco_branca,
+  round(sum(CASE WHEN tipo_bandeira = 'BANDEIRA' THEN soma_valor END)
+      / sum(CASE WHEN tipo_bandeira = 'BANDEIRA' THEN coletas END), 3) AS preco_bandeira,
+  round(sum(CASE WHEN tipo_bandeira = 'BANDEIRA' THEN soma_valor END)
+      / sum(CASE WHEN tipo_bandeira = 'BANDEIRA' THEN coletas END)
+      - sum(CASE WHEN tipo_bandeira = 'BRANCA' THEN soma_valor END)
+      / sum(CASE WHEN tipo_bandeira = 'BRANCA' THEN coletas END), 3) AS diferenca_bandeira
+FROM precos_uf_mes
+WHERE ano = '2025'
+  AND produto = 'GASOLINA'
+GROUP BY uf
+ORDER BY preco_medio DESC
+LIMIT 10
+--- resultado ---
+uf	coletas	preco_medio	preco_branca	preco_bandeira	diferenca_bandeira
+AC	700	7.671	7.738	7.664	-0.074
+AM	2731	7.226	7.754	7.149	-0.605
+RR	798	6.948	6.942	6.951	0.009
+RO	2646	6.915	6.919	6.914	-0.005
+SE	1549	6.548	6.482	6.58	0.098
+TO	2116	6.534	6.551	6.516	-0.035
+DF	2574	6.443	6.442	6.443	0.002
+PR	13545	6.428	6.269	6.484	0.214
+PA	5669	6.401	6.224	6.501	0.277
+SC	7948	6.393	6.345	6.41	0.065
+

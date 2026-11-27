@@ -37,13 +37,3 @@ variable "athena_results_bucket_arn" {
   type        = string
   description = "Bucket de resultados do Athena."
 }
-
-variable "gerenciar_admins_lf" {
-  type        = bool
-  description = "Se true, define os admins do Lake Formation da CONTA INTEIRA. So use em conta exclusiva."
-}
-
-variable "admins_lf_extras" {
-  type        = list(string)
-  description = "ARNs que continuam admins do Lake Formation quando gerenciar_admins_lf = true."
-}

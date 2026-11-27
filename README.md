@@ -2,6 +2,8 @@
 
 Projeto do grupo 11 da disciplina **Engenharia de Dados** (CESAR School).
 
+Slug do cenário: `precos-combustiveis`.
+
 **Cenário:** preços de gasolina e etanol nos postos do Brasil, a partir dos dados
 abertos da ANP. **Pergunta de negócio:** em quais estados a gasolina comum é mais
 cara, e os postos com bandeira cobram mais que os de bandeira branca?
@@ -13,7 +15,7 @@ na tag `av1-entrega` e em `parte-1/`.
 ## Estrutura
 
 - `parte-2/` — AV2 (tema ANP); deploy, carga e destroy em `parte-2/README.md`
-  - `terraform/` — módulos `lake` (3 camadas S3, Glue e Athena) e `acesso`
+  - `terraform/` — módulos `admin-lf`, `lake` (3 camadas S3, Glue e Athena) e `acesso`
     (Lake Formation), backend remoto S3 e workspace `av2`
   - `dados/carregar.sh`, `dados/ingerir-anp.py` e `dados/fontes-anp.csv` —
     ingestão idempotente dos CSVs mensais da ANP para raw, trusted e refined

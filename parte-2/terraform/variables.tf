@@ -59,15 +59,3 @@ variable "meta_bytes_consulta" {
   default     = 1048576
   description = "Meta declarada de DataScannedInBytes da pergunta de negocio (1 MiB). Conferida pelo verifica.sh."
 }
-
-variable "gerenciar_admins_lf" {
-  type        = bool
-  default     = false
-  description = "Se true, o Terraform define os admins do Lake Formation da CONTA INTEIRA (e zera a lista no destroy). Deixe false em conta compartilhada."
-}
-
-variable "admins_lf_extras" {
-  type        = list(string)
-  default     = []
-  description = "ARNs que continuam admins do Lake Formation quando gerenciar_admins_lf = true (por exemplo, o do docente)."
-}
