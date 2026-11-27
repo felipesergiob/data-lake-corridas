@@ -28,22 +28,15 @@ Módulo `acesso` (`terraform/modules/acesso/`):
 Região obrigatória: `us-east-1` (N. Virginia). As decisões e os números estão
 no `DECISOES.md`.
 
-## Antes do primeiro apply: Lake Formation
+## Lake Formation
 
-1. **Quem roda o apply precisa ser admin do Lake Formation** na conta (console
-   do Lake Formation → Administrative roles and tasks). Sem isso, o registro
-   dos buckets e as concessões falham.
-2. **Não ligue `gerenciar_admins_lf`** se a conta for compartilhada com outros
-   grupos ou com o docente. Esse recurso substitui a lista de admins da conta
-   inteira, e o `destroy` dele zera a lista. Ele existe só para conta exclusiva:
-
-   ```hcl
-   # terraform.tfvars, SO em conta exclusiva do grupo
-   gerenciar_admins_lf = true
-   admins_lf_extras    = ["arn:aws:iam::<conta>:role/<admin-que-deve-continuar>"]
-   ```
-3. O apply roda `modules/acesso/revoga-iam-allowed.sh` com `bash` e a AWS CLI.
-   No Windows, rode o Terraform pelo Git Bash.
+- Quem roda o apply precisa ser admin do Lake Formation na conta (console do
+  Lake Formation, Administrative roles and tasks).
+- `gerenciar_admins_lf` fica `false`: ligado, ele substitui os admins da conta
+  inteira. Só use em conta exclusiva do grupo, listando em `admins_lf_extras`
+  quem deve continuar admin.
+- O apply roda `modules/acesso/revoga-iam-allowed.sh` com bash e AWS CLI. No
+  Windows, use o Git Bash.
 
 ## Pré-requisitos
 
@@ -95,13 +88,9 @@ Na raiz do repositório:
 ./parte-2/dados/carregar.sh 2024-06           # backfill de uma particao
 ```
 
-Para cada mês, o `carregar.sh`:
-
-1. roda `ingerir-anp.py`, que baixa o CSV da ANP (ou reaproveita o que já foi
-   baixado) e monta localmente `saida/{raw,trusted,refined}/.../ano=AAAA/mes=MM/`;
-2. em cada camada, apaga o prefixo da partição no S3 e copia a partição local.
-
-Rodar de novo o mesmo mês deixa os mesmos objetos, sem duplicar.
+Para cada mês, o `carregar.sh` roda o `ingerir-anp.py` (que baixa o CSV da ANP
+e gera as três camadas em `saida/`) e, em cada camada, apaga a partição no S3
+antes de copiar. Rodar o mesmo mês de novo não duplica.
 
 ## Consultas
 
